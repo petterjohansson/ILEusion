@@ -2,7 +2,7 @@
 
         // -----------------------------------------------------------------------------
         // Start it:
-        // SBMJOB CMD(CALL PGM(JSONSRV)) JOB(ILEASTIC1) JOBQ(QSYSNOMAX) ALWMLTTHD(*YES)
+        // SBMJOB CMD(CALL PGM(ILEUSION)) JOB(ILEASTIC1) JOBQ(QSYSNOMAX) ALWMLTTHD(*YES)
         // -----------------------------------------------------------------------------     
         
         ctl-opt copyright('Sitemule.com  (C), 2018');
@@ -37,7 +37,7 @@
           length Uns(10) Value;
         End-Pr;
         
-        Dcl-Ds CurrentArg_T Qualified Tempate;
+        Dcl-Ds CurrentArg_T Qualified Template;
           ArraySize   Int(5);
           ByteSize    Int(5); //Size of type for each element
           Type        Char(10);
@@ -103,7 +103,7 @@
             
           Else;
             gError = Generate_Error('Requires POST request.');
-            il_responseWrite(response:json_AsJsonText(gError));
+            il_responseWrite(response:JSON_AsJsonText(gError));
           Endif;
           
           If (gError <> *NULL);
@@ -131,7 +131,7 @@
           
           If (JSON_Error(lDocument));
             gError = Generate_Error('Error parsing JSON.');
-            il_responseWrite(response:json_AsJsonText(gError));
+            il_responseWrite(response:JSON_AsJsonText(gError));
               
           Else;
           
@@ -146,14 +146,14 @@
                 il_responseWrite(response:JSON_AsJsonText(gError));
                 
               Else;
-                lContent = json_AsJsonText(lResultSet);
+                lContent = JSON_AsJsonText(lResultSet);
                 il_responseWrite(response:lContent);
-                //il_responseWriteStream(response : json_stream(lResultSet));
+                //il_responseWriteStream(response : JSON_stream(lResultSet));
                 
-                json_NodeDelete(lResultSet);
+                JSON_NodeDelete(lResultSet);
               Endif;
               
-              json_sqlDisconnect();
+              JSON_sqlDisconnect();
               
             Else;
               gError = Generate_Error('Missing SQL statement.');
@@ -162,7 +162,7 @@
             
           Endif;
           
-          json_NodeDelete(lDocument);
+          JSON_NodeDelete(lDocument);
         End-Proc;
         
         // -----------------------------------------------------------------------------
@@ -221,8 +221,8 @@
               rslvsp.Obj_name = ProgramInfo.Name;
               GetObjectPointer(ProgramInfo.ObjPtr:rslvsp:ProgramInfo.LibPtr);
               
-              lList = json_SetIterator(lDocument:'args'); //Array: value, type
-              dow json_ForEach(lList);
+              lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
+              dow JSON_ForEach(lList);
                 
                 
                 ProgramInfo.argc += 1;
@@ -246,22 +246,19 @@
               Monitor;
                 callpgmv(ProgramInfo.ObjPtr : ProgramInfo.argv : ProgramInfo.argc);
                 
-                lResult = json_NewArray();
+                lResult = JSON_NewArray();
                 lIndex  = 0;
                 
-                lList = json_SetIterator(lDocument:'args'); //Array: value, type
-                dow json_ForEach(lList);
+                lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
+                dow JSON_ForEach(lList);
                   lIndex += 1;
                   
-                  CurrentArg.Type        = JSON_GetStr(lList.this:'type');
-                  CurrentArg.Length      = json_GetNum(lList.this:'length':1);
-                  
                   JSON_ArrayPush(lResult:
-                       Get_Result(CurrentArg:ProgramInfo.argv(lIndex)));
+                       Get_Result(lList.this:ProgramInfo.argv(lIndex)));
                        
                 enddo;
                 
-                lContent = json_AsJsonText(lResult);
+                lContent = JSON_AsJsonText(lResult);
                 il_responseWrite(response:lContent);
               On-Error *All;
                 gError = Generate_Error('Error calling RPG program.');
@@ -279,7 +276,7 @@
           
           Endif;
           
-          json_NodeDelete(lDocument);
+          JSON_NodeDelete(lDocument);
         End-Proc;
         
         // -----------------------------------------------------------------------------
@@ -295,13 +292,13 @@
           Dcl-S  lTotal     Int(5);
           Dcl-S  lArray     Pointer;
           Dcl-S  lResult    Varchar(MAX_STRING);
-          Dcl-S  ValuePtr   LikeDS(Types);
+          Dcl-DS ValuePtr   LikeDS(Types);
           Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
-          CurrentArg.Length      = json_GetNum(pCurrentArg:'length':1);
-          CurrentArg.ByteSize    = json_GetNum(pCurrentArg:'bytesize':0);
-          CurrentArg.ArraySize   = json_GetNum(pCurrentArg:'arraysize':1);
+          CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
+          CurrentArg.ByteSize    = JSON_GetNum(pCurrentArg:'bytesize':0);
+          CurrentArg.ArraySize   = JSON_GetNum(pCurrentArg:'arraysize':1);
 
           If (CurrentArg.ByteSize > 0);
             lIndex = 0;
@@ -358,11 +355,14 @@
                       lResult = %Char(ValuePtr.double);
                   Endsl;
               Endsl;
+              
+              JSON_ArrayPush(lArray:lResult);
+              lIndex += CurrentArg.ByteSize;
             Enddo;
 
           Endif;
           
-          Return lResult;
+          Return lArray;
         End-Proc;
           
         // -----------------------------------------------------------------------------
@@ -385,11 +385,11 @@
             lArray    = JSON_NewArray();
             JSON_ArrayPush(lArray:JSON_GetStr(pCurrentArg:'value'));
           Else;
-            CurrentArg.ArraySize = JSON_Length(lArray);
+            CurrentArg.ArraySize = JSON_GetLength(lArray);
           Endif;
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
-          CurrentArg.Length      = json_GetNum(pCurrentArg:'length':1);
+          CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
           CurrentArg.ByteSize    = 0;
 
           Select;
@@ -405,33 +405,33 @@
             When (CurrentArg.Type = 'int');
               Select;
                 When (CurrentArg.Length = 3);
-                  CurrentArg.ByteSize = %Size(int3);
+                  CurrentArg.ByteSize = %Size(Types.int3);
                 When (CurrentArg.Length = 5);
-                  CurrentArg.ByteSize = %Size(int5);
+                  CurrentArg.ByteSize = %Size(Types.int5);
                 When (CurrentArg.Length = 10);
-                  CurrentArg.ByteSize = %Size(int10);
+                  CurrentArg.ByteSize = %Size(Types.int10);
                 When (CurrentArg.Length = 20);
-                  CurrentArg.ByteSize = %Size(int20);
+                  CurrentArg.ByteSize = %Size(Types.int20);
               Endsl;
               
             When (CurrentArg.Type = 'uns');
               Select;
                 When (CurrentArg.Length = 3);
-                  CurrentArg.ByteSize = %Size(uns3);
+                  CurrentArg.ByteSize = %Size(Types.uns3);
                 When (CurrentArg.Length = 5);
-                  CurrentArg.ByteSize = %Size(uns5);
+                  CurrentArg.ByteSize = %Size(Types.uns5);
                 When (CurrentArg.Length = 10);
-                  CurrentArg.ByteSize = %Size(uns10);
+                  CurrentArg.ByteSize = %Size(Types.uns10);
                 When (CurrentArg.Length = 20);
-                  CurrentArg.ByteSize = %Size(uns20);
+                  CurrentArg.ByteSize = %Size(Types.uns20);
               Endsl;
             
             When (CurrentArg.Type = 'float');
               Select;
                 When (CurrentArg.Length = 4);
-                  CurrentArg.ByteSize = %Size(float);
+                  CurrentArg.ByteSize = %Size(Types.float);
                 When (CurrentArg.Length = 8);
-                  CurrentArg.ByteSize = %Size(double);
+                  CurrentArg.ByteSize = %Size(Types.double);
               Endsl;
           Endsl;
 
@@ -461,12 +461,12 @@
           End-Pi;
 
           Dcl-Ds ValuePtr LikeDS(Types);
-          Dcl-S lIndex Int(5);
-          Dcl-S lList  Pointer;
+          Dcl-S  lIndex   Int(5);
+          Dcl-DS lList    likeds(JSON_ITERATOR);
 
           lIndex = 0;
-          lList = json_SetIterator(pArray); //Array: value
-          Dow json_ForEach(lList);
+          lList = JSON_SetIterator(pArray); //Array: value
+          Dow JSON_ForEach(lList);
             Select;
               When (pArg.Type = 'char');
                 %Str(pResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
@@ -517,7 +517,7 @@
                 memcpy(pResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
             Endsl;
 
-            lIndex += CurrentArg.ByteSize;
+            lIndex += pArg.ByteSize;
           Enddo;
         End-Proc;
         
@@ -530,9 +530,9 @@
           
           Dcl-S lResult Pointer;
           
-          lResult = json_newObject();
-          json_SetBool(lResult:'success':*Off);
-          json_SetStr(lResult:'message': pMessage);
+          lResult = JSON_newObject();
+          JSON_SetBool(lResult:'success':*Off);
+          JSON_SetStr(lResult:'message': pMessage);
           
           return lResult;
         End-Proc;
