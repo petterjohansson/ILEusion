@@ -31,10 +31,24 @@
           argc    Uns(10) Value;
         End-Pr;
         
-        Dcl-DS CurrentArg_T Qualified Template;
-          StringValue Varchar(MAX_STRING);
-          Type        Char(15);
-          Length      Uns(10);
+        Dcl-Ds CurrentArg_T Qualified Tempate;
+          ArraySize   Int(5);
+          ByteSize    Int(5); //Size of type for each element
+          Type        Char(10);
+          Length      Int(5); //Variable length for each element
+        End-Ds;
+  
+        Dcl-Ds Types Qualified Template;
+          int3   Int(3)   Pos(1);
+          int5   Int(5)   Pos(1);
+          int10  Int(10)  Pos(1);
+          int20  Int(20)  Pos(1);
+          uns3   Uns(3)   Pos(1);
+          uns5   Uns(5)   Pos(1);
+          uns10  Uns(10)  Pos(1);
+          uns20  Uns(20)  Pos(1);
+          float  Float(4) Pos(1);
+          double Float(8) Pos(1);
         End-Ds;
         
         Dcl-S gError Pointer;
@@ -169,7 +183,6 @@
           End-Ds;
           
           Dcl-S  lIndex     Uns(3);
-          Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
           Dcl-S  MakeCall   Ind Inz(*On);
           
           Dcl-Ds rslvsp Qualified;
@@ -205,12 +218,9 @@
               lList = json_SetIterator(lDocument:'args'); //Array: value, type
               dow json_ForEach(lList);
                 
-                CurrentArg.StringValue = JSON_GetStr(lList.this:'value');
-                CurrentArg.Type        = JSON_GetStr(lList.this:'type');
-                CurrentArg.Length      = json_GetNum(lList.this:'length':1);
                 
                 ProgramInfo.argc += 1;
-                ProgramInfo.argv(ProgramInfo.argc) = Generate_Data(CurrentArg);
+                ProgramInfo.argv(ProgramInfo.argc) = Generate_Data(lList.this);
                 
                 If (ProgramInfo.argv(ProgramInfo.argc) = *NULL);
                   MakeCall = *Off;
@@ -223,6 +233,8 @@
               il_responseWrite(response:JSON_AsJsonText(gError));
               MakeCall = *Off;
             Endmon;
+
+            //**************************
             
             If (MakeCall);
               Monitor;
@@ -269,30 +281,17 @@
         Dcl-Proc Get_Result;
         
           Dcl-Pi *N Varchar(MAX_STRING);
-            pCurrentArg LikeDS(CurrentArg_T);
-            pValue      Pointer;
+            pJsonObj  Pointer;
+            pValue    Pointer;
           End-Pi;
           
           Dcl-S lResult Varchar(MAX_STRING);
           
-          Dcl-Ds ValuePtr Based(pValue);
-            int3   Int(3)   Pos(1);
-            int5   Int(5)   Pos(1);
-            int10  Int(10)  Pos(1);
-            int20  Int(20)  Pos(1);
-            uns3   Uns(3)   Pos(1);
-            uns5   Uns(5)   Pos(1);
-            uns10  Uns(10)  Pos(1);
-            uns20  Uns(20)  Pos(1);
-            float  Float(4) Pos(1);
-            double Float(8) Pos(1);
-          End-Ds;
-          
           Select;
-            When (pCurrentArg.Type = 'char');
+            When (CurrentArg.Type = 'char');
               lResult = %TrimR(%Str(pValue:MAX_STRING));
               
-            When (pCurrentArg.Type = 'bool');
+            When (CurrentArg.Type = 'bool');
               lResult = %Str(pValue:MAX_STRING);
               If (lResult = '1');
                 lResult = 'true';
@@ -300,38 +299,38 @@
                 lResult = 'false';
               Endif;
               
-            When (pCurrentArg.Type = 'ind');
+            When (CurrentArg.Type = 'ind');
               lResult = %Str(pValue:MAX_STRING);
               
-            When (pCurrentArg.Type = 'int');
+            When (CurrentArg.Type = 'int');
               Select;
-                When (pCurrentArg.Length = 3);
+                When (CurrentArg.Length = 3);
                   lResult = %Char(int3);
-                When (pCurrentArg.Length = 5);
+                When (CurrentArg.Length = 5);
                   lResult = %Char(int5);
-                When (pCurrentArg.Length = 10);
+                When (CurrentArg.Length = 10);
                   lResult = %Char(int10);
-                When (pCurrentArg.Length = 20);
+                When (CurrentArg.Length = 20);
                   lResult = %Char(int20);
               Endsl;
               
-            When (pCurrentArg.Type = 'uns');
+            When (CurrentArg.Type = 'uns');
               Select;
-                When (pCurrentArg.Length = 3);
+                When (CurrentArg.Length = 3);
                   lResult = %Char(uns3);
-                When (pCurrentArg.Length = 5);
+                When (CurrentArg.Length = 5);
                   lResult = %Char(uns5);
-                When (pCurrentArg.Length = 10);
+                When (CurrentArg.Length = 10);
                   lResult = %Char(uns10);
-                When (pCurrentArg.Length = 20);
+                When (CurrentArg.Length = 20);
                   lResult = %Char(uns20);
               Endsl;
             
-            When (pCurrentArg.Type = 'float');
+            When (CurrentArg.Type = 'float');
               Select;
-                When (pCurrentArg.Length = 4);
+                When (CurrentArg.Length = 4);
                   lResult = %Char(float);
-                When (pCurrentArg.Length = 8);
+                When (CurrentArg.Length = 8);
                   lResult = %Char(double);
               Endsl;
           Endsl;
@@ -343,7 +342,92 @@
         
         Dcl-Proc Generate_Data;
           Dcl-Pi *N Pointer;
-            pCurrentArg LikeDS(CurrentArg_T);
+            pCurrentArg Pointer;
+          End-Pi;
+          
+          Dcl-S lArray  Pointer Inz(*NULL);
+          Dcl-S lResult Pointer Inz(*NULL);
+
+          Dcl-S  TotalSize  Int(5);
+          Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
+
+          lArray = JSON_Locate(pCurrentArg:'values');
+
+          if (lArray = *NULL);
+            CurrentArg.ArraySize = 1;
+            lArray    = JSON_NewArray();
+            JSON_ArrayPush(lArray:JSON_GetStr(pCurrentArg:'value'));
+          Else;
+            CurrentArg.ArraySize = JSON_Length(lArray);
+          Endif;
+
+          CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
+          CurrentArg.Length      = json_GetNum(pCurrentArg:'length':1);
+          CurrentArg.ByteSize     = 0;
+
+          Select;
+            When (CurrentArg.Type = 'char');
+              CurrentArg.ByteSize = CurrentArg.Length;
+              
+            When (CurrentArg.Type = 'bool');
+              CurrentArg.ByteSize = 2;
+              
+            When (CurrentArg.Type = 'ind');
+              CurrentArg.ByteSize = 2;
+              
+            When (CurrentArg.Type = 'int');
+              Select;
+                When (CurrentArg.Length = 3);
+                  CurrentArg.ByteSize = %Size(int3);
+                When (CurrentArg.Length = 5);
+                  CurrentArg.ByteSize = %Size(int5);
+                When (CurrentArg.Length = 10);
+                  CurrentArg.ByteSize = %Size(int10);
+                When (CurrentArg.Length = 20);
+                  CurrentArg.ByteSize = %Size(int20);
+              Endsl;
+              
+            When (CurrentArg.Type = 'uns');
+              Select;
+                When (CurrentArg.Length = 3);
+                  CurrentArg.ByteSize = %Size(uns3);
+                When (CurrentArg.Length = 5);
+                  CurrentArg.ByteSize = %Size(uns5);
+                When (CurrentArg.Length = 10);
+                  CurrentArg.ByteSize = %Size(uns10);
+                When (CurrentArg.Length = 20);
+                  CurrentArg.ByteSize = %Size(uns20);
+              Endsl;
+            
+            When (CurrentArg.Type = 'float');
+              Select;
+                When (CurrentArg.Length = 4);
+                  CurrentArg.ByteSize = %Size(float);
+                When (CurrentArg.Length = 8);
+                  CurrentArg.ByteSize = %Size(double);
+              Endsl;
+          Endsl;
+
+          If (CurrentArg.ByteSize);
+            TotalSize = CurrentArg.ByteSize * ArraySize;
+            If (CurrentArg.Type = 'char');
+              TotalSize += 1; //Null term string
+            Endif;
+
+            lResult = %Alloc(TotalSize);
+            AppendValues(lResult:lArray:CurrentArg);
+          Endif;
+
+          Return lResult;
+        End-Proc;
+        
+        // -----------------------------------------------------------------------------
+
+        Dcl-Proc AppendValues;
+          Dcl-Pi *N;
+            pResult Pointer;
+            pArray  Pointer;
+            pArg    LikeDS(CurrentArg_T);
           End-Pi;
           
           Dcl-Pr memcpy ExtProc('__memcpy');
@@ -351,79 +435,66 @@
             source Pointer Value;
             length Uns(10) Value;
           End-Pr;
-          
-          Dcl-S lResult Pointer Inz(*NULL);
-          
-          Dcl-Ds ValuePtr;
-            int3   Int(3)   Pos(1);
-            int5   Int(5)   Pos(1);
-            int10  Int(10)  Pos(1);
-            int20  Int(20)  Pos(1);
-            uns3   Uns(3)   Pos(1);
-            uns5   Uns(5)   Pos(1);
-            uns10  Uns(10)  Pos(1);
-            uns20  Uns(20)  Pos(1);
-            float  Float(4) Pos(1);
-            double Float(8) Pos(1);
-          End-Ds;
-          
-          Select;
-            When (pCurrentArg.Type = 'char');
-              lResult = %Alloc(pCurrentArg.Length+1);
-              %Str(lResult:pCurrentArg.Length) = pCurrentArg.StringValue;
+
+          Dcl-Ds ValuePtr LikeDS(Types) Based(pValue);
+          Dcl-S lIndex Int(5);
+          Dcl-S lList  Pointer;
+
+          lIndex = 0;
+          lList = json_SetIterator(pArray); //Array: value
+          Dow json_ForEach(lList);
+            Select;
+              When (pArg.Type = 'char');
+                %Str(lResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
+                
+              When (pArg.Type = 'bool');
+                If (JSON_GetStr(lList.this) = 'true');
+                  %Str(lResult+lIndex:pArg.ByteSize) = '1';
+                Else;
+                  %Str(lResult+lIndex:pArg.ByteSize) = '0';
+                Endif;
+                
+              When (pArg.Type = 'ind');
+                %Str(lResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
+                
+              When (pArg.Type = 'int');
+                Select;
+                  When (pArg.Length = 3);
+                    ValuePtr.int3 = %Int(JSON_GetStr(lList.this));
+                  When (pArg.Length = 5);
+                    ValuePtr.int5 = %Int(JSON_GetStr(lList.this));
+                  When (pArg.Length = 10);
+                    ValuePtr.int10 = %Int(JSON_GetStr(lList.this));
+                  When (pArg.Length = 20);
+                    ValuePtr.int20 = %Int(JSON_GetStr(lList.this));
+                Endsl;
+                memcpy(lResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
+                
+              When (pArg.Type = 'uns');
+                Select;
+                  When (pArg.Length = 3);
+                    ValuePtr.uns3 = %Uns(JSON_GetStr(lList.this));
+                  When (pArg.Length = 5);
+                    ValuePtr.uns5 = %Uns(JSON_GetStr(lList.this));
+                  When (pArg.Length = 10);
+                    ValuePtr.uns10 = %Uns(JSON_GetStr(lList.this));
+                  When (pArg.Length = 20);
+                    ValuePtr.uns20 = %Uns(JSON_GetStr(lList.this));
+                Endsl;
+                memcpy(lResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
               
-            When (pCurrentArg.Type = 'bool');
-              lResult = %Alloc(2);
-              If (pCurrentArg.StringValue = 'true');
-                %Str(lResult:pCurrentArg.Length) = '1';
-              Else;
-                %Str(lResult:pCurrentArg.Length) = '0';
-              Endif;
-              
-            When (pCurrentArg.Type = 'ind');
-              lResult = %Alloc(2);
-              %Str(lResult:pCurrentArg.Length) = pCurrentArg.StringValue;
-              
-            When (pCurrentArg.Type = 'int');
-              lResult = %Alloc(%Size(ValuePtr));
-              Select;
-                When (pCurrentArg.Length = 3);
-                  int3 = %Int(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 5);
-                  int5 = %Int(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 10);
-                  int10 = %Int(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 20);
-                  int20 = %Int(pCurrentArg.StringValue);
-              Endsl;
-              memcpy(lResult:%Addr(ValuePtr):%Size(ValuePtr));
-              
-            When (pCurrentArg.Type = 'uns');
-              lResult = %Alloc(%Size(ValuePtr));
-              Select;
-                When (pCurrentArg.Length = 3);
-                  uns3 = %Uns(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 5);
-                  uns5 = %Uns(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 10);
-                  uns10 = %Uns(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 20);
-                  uns20 = %Uns(pCurrentArg.StringValue);
-              Endsl;
-              memcpy(lResult:%Addr(ValuePtr):%Size(ValuePtr));
-            
-            When (pCurrentArg.Type = 'float');
-              lResult = %Alloc(%Size(ValuePtr));
-              Select;
-                When (pCurrentArg.Length = 4);
-                  float = %Float(pCurrentArg.StringValue);
-                When (pCurrentArg.Length = 8);
-                  double = %Float(pCurrentArg.StringValue);
-              Endsl;
-              memcpy(lResult:%Addr(ValuePtr):%Size(ValuePtr));
-          Endsl;
-          
-          Return lResult;
+              When (pArg.Type = 'float');
+                Select;
+                  When (pArg.Length = 4);
+                    ValuePtr.float = %Float(JSON_GetStr(lList.this));
+                  When (pArg.Length = 8);
+                    ValuePtr.double = %Float(JSON_GetStr(lList.this));
+                Endsl;
+                memcpy(lResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
+            Endsl;
+
+            lIndex += CurrentArg.ByteSize;
+          Enddo;
         End-Proc;
         
         // -----------------------------------------------------------------------------
