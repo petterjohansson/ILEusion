@@ -443,6 +443,7 @@
 
           If (CurrentArg.ByteSize > 0);
             JSON_SetNum(pCurrentArg:'bytesize':CurrentArg.ByteSize);
+            JSON_SetNum(pCurrentArg:'arraysize':CurrentArg.ArraySize);
 
             TotalSize = CurrentArg.ByteSize * CurrentArg.ArraySize;
             If (CurrentArg.Type = 'char');
