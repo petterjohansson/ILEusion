@@ -30,6 +30,12 @@
           argv    Pointer Dim(256);
           argc    Uns(10) Value;
         End-Pr;
+
+        Dcl-Pr memcpy ExtProc('__memcpy');
+          target Pointer Value;
+          source Pointer Value;
+          length Uns(10) Value;
+        End-Pr;
         
         Dcl-Ds CurrentArg_T Qualified Tempate;
           ArraySize   Int(5);
@@ -280,60 +286,81 @@
         
         Dcl-Proc Get_Result;
         
-          Dcl-Pi *N Varchar(MAX_STRING);
-            pJsonObj  Pointer;
-            pValue    Pointer;
+          Dcl-Pi *N Pointer;
+            pCurrentArg Pointer; //Info about the current argument
+            pValue      Pointer; //Value pointer
           End-Pi;
           
-          Dcl-S lResult Varchar(MAX_STRING);
-          
-          Select;
-            When (CurrentArg.Type = 'char');
-              lResult = %TrimR(%Str(pValue:MAX_STRING));
-              
-            When (CurrentArg.Type = 'bool');
-              lResult = %Str(pValue:MAX_STRING);
-              If (lResult = '1');
-                lResult = 'true';
-              Else;
-                lResult = 'false';
-              Endif;
-              
-            When (CurrentArg.Type = 'ind');
-              lResult = %Str(pValue:MAX_STRING);
-              
-            When (CurrentArg.Type = 'int');
+          Dcl-S  lIndex     Int(5);
+          Dcl-S  lTotal     Int(5);
+          Dcl-S  lArray     Pointer;
+          Dcl-S  lResult    Varchar(MAX_STRING);
+          Dcl-S  ValuePtr   LikeDS(Types);
+          Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
+
+          CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
+          CurrentArg.Length      = json_GetNum(pCurrentArg:'length':1);
+          CurrentArg.ByteSize    = json_GetNum(pCurrentArg:'bytesize':0);
+          CurrentArg.ArraySize   = json_GetNum(pCurrentArg:'arraysize':1);
+
+          If (CurrentArg.ByteSize > 0);
+            lIndex = 0;
+            lArray = JSON_NewArray();
+            lTotal = CurrentArg.ByteSize * CurrentArg.ArraySize;
+
+            Dow (lIndex < lTotal);
+              memcpy(%Addr(ValuePtr):pValue+lIndex:CurrentArg.ByteSize);
+                
               Select;
-                When (CurrentArg.Length = 3);
-                  lResult = %Char(int3);
-                When (CurrentArg.Length = 5);
-                  lResult = %Char(int5);
-                When (CurrentArg.Length = 10);
-                  lResult = %Char(int10);
-                When (CurrentArg.Length = 20);
-                  lResult = %Char(int20);
+                When (CurrentArg.Type = 'char');
+                  lResult = %TrimR(%Str(pValue+lIndex:CurrentArg.ByteSize));
+                  
+                When (CurrentArg.Type = 'bool');
+                  lResult = %TrimR(%Str(pValue+lIndex:CurrentArg.ByteSize));
+                  If (lResult = '1');
+                    lResult = 'true';
+                  Else;
+                    lResult = 'false';
+                  Endif;
+                  
+                When (CurrentArg.Type = 'ind');
+                  lResult = %TrimR(%Str(pValue+lIndex:CurrentArg.ByteSize));
+                  
+                When (CurrentArg.Type = 'int');
+                  Select;
+                    When (CurrentArg.Length = 3);
+                      lResult = %Char(ValuePtr.int3);
+                    When (CurrentArg.Length = 5);
+                      lResult = %Char(ValuePtr.int5);
+                    When (CurrentArg.Length = 10);
+                      lResult = %Char(ValuePtr.int10);
+                    When (CurrentArg.Length = 20);
+                      lResult = %Char(ValuePtr.int20);
+                  Endsl;
+                  
+                When (CurrentArg.Type = 'uns');
+                  Select;
+                    When (CurrentArg.Length = 3);
+                      lResult = %Char(ValuePtr.uns3);
+                    When (CurrentArg.Length = 5);
+                      lResult = %Char(ValuePtr.uns5);
+                    When (CurrentArg.Length = 10);
+                      lResult = %Char(ValuePtr.uns10);
+                    When (CurrentArg.Length = 20);
+                      lResult = %Char(ValuePtr.uns20);
+                  Endsl;
+                
+                When (CurrentArg.Type = 'float');
+                  Select;
+                    When (CurrentArg.Length = 4);
+                      lResult = %Char(ValuePtr.float);
+                    When (CurrentArg.Length = 8);
+                      lResult = %Char(ValuePtr.double);
+                  Endsl;
               Endsl;
-              
-            When (CurrentArg.Type = 'uns');
-              Select;
-                When (CurrentArg.Length = 3);
-                  lResult = %Char(uns3);
-                When (CurrentArg.Length = 5);
-                  lResult = %Char(uns5);
-                When (CurrentArg.Length = 10);
-                  lResult = %Char(uns10);
-                When (CurrentArg.Length = 20);
-                  lResult = %Char(uns20);
-              Endsl;
-            
-            When (CurrentArg.Type = 'float');
-              Select;
-                When (CurrentArg.Length = 4);
-                  lResult = %Char(float);
-                When (CurrentArg.Length = 8);
-                  lResult = %Char(double);
-              Endsl;
-          Endsl;
+            Enddo;
+
+          Endif;
           
           Return lResult;
         End-Proc;
@@ -363,7 +390,7 @@
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
           CurrentArg.Length      = json_GetNum(pCurrentArg:'length':1);
-          CurrentArg.ByteSize     = 0;
+          CurrentArg.ByteSize    = 0;
 
           Select;
             When (CurrentArg.Type = 'char');
@@ -408,8 +435,11 @@
               Endsl;
           Endsl;
 
-          If (CurrentArg.ByteSize);
-            TotalSize = CurrentArg.ByteSize * ArraySize;
+
+          If (CurrentArg.ByteSize > 0);
+            JSON_SetNum(pCurrentArg:'bytesize':CurrentArg.ByteSize);
+
+            TotalSize = CurrentArg.ByteSize * CurrentArg.ArraySize;
             If (CurrentArg.Type = 'char');
               TotalSize += 1; //Null term string
             Endif;
@@ -429,14 +459,8 @@
             pArray  Pointer;
             pArg    LikeDS(CurrentArg_T);
           End-Pi;
-          
-          Dcl-Pr memcpy ExtProc('__memcpy');
-            target Pointer Value;
-            source Pointer Value;
-            length Uns(10) Value;
-          End-Pr;
 
-          Dcl-Ds ValuePtr LikeDS(Types) Based(pValue);
+          Dcl-Ds ValuePtr LikeDS(Types);
           Dcl-S lIndex Int(5);
           Dcl-S lList  Pointer;
 
@@ -445,17 +469,17 @@
           Dow json_ForEach(lList);
             Select;
               When (pArg.Type = 'char');
-                %Str(lResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
+                %Str(pResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
                 
               When (pArg.Type = 'bool');
                 If (JSON_GetStr(lList.this) = 'true');
-                  %Str(lResult+lIndex:pArg.ByteSize) = '1';
+                  %Str(pResult+lIndex:pArg.ByteSize) = '1';
                 Else;
-                  %Str(lResult+lIndex:pArg.ByteSize) = '0';
+                  %Str(pResult+lIndex:pArg.ByteSize) = '0';
                 Endif;
                 
               When (pArg.Type = 'ind');
-                %Str(lResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
+                %Str(pResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
                 
               When (pArg.Type = 'int');
                 Select;
@@ -468,7 +492,7 @@
                   When (pArg.Length = 20);
                     ValuePtr.int20 = %Int(JSON_GetStr(lList.this));
                 Endsl;
-                memcpy(lResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
+                memcpy(pResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
                 
               When (pArg.Type = 'uns');
                 Select;
@@ -481,7 +505,7 @@
                   When (pArg.Length = 20);
                     ValuePtr.uns20 = %Uns(JSON_GetStr(lList.this));
                 Endsl;
-                memcpy(lResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
+                memcpy(pResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
               
               When (pArg.Type = 'float');
                 Select;
@@ -490,7 +514,7 @@
                   When (pArg.Length = 8);
                     ValuePtr.double = %Float(JSON_GetStr(lList.this));
                 Endsl;
-                memcpy(lResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
+                memcpy(pResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
             Endsl;
 
             lIndex += CurrentArg.ByteSize;
