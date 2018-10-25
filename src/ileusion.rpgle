@@ -188,6 +188,7 @@
             ObjPtr  Pointer;
           End-Ds;
           
+          Dcl-S  lResParm   Pointer;
           Dcl-S  lIndex     Uns(3);
           Dcl-S  MakeCall   Ind Inz(*On);
           
@@ -223,8 +224,6 @@
               
               lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
               dow JSON_ForEach(lList);
-                
-                
                 ProgramInfo.argc += 1;
                 ProgramInfo.argv(ProgramInfo.argc) = Generate_Data(lList.this);
                 
@@ -253,13 +252,19 @@
                 dow JSON_ForEach(lList);
                   lIndex += 1;
                   
-                  JSON_ArrayPush(lResult:
-                       Get_Result(lList.this:ProgramInfo.argv(lIndex)));
+                  lResParm = Get_Result(lList.this:ProgramInfo.argv(lIndex));
+                  
+                  If (JSON_GetLength(lResParm) = 1);
+                    JSON_ArrayPush(lResult:JSON_GetChild(lResParm));
+                  Else;
+                    JSON_ArrayPush(lResult:lResParm);
+                  Endif;
                        
                 enddo;
                 
                 lContent = JSON_AsJsonText(lResult);
                 il_responseWrite(response:lContent);
+                JSON_NodeDelete(lResult);
               On-Error *All;
                 gError = Generate_Error('Error calling RPG program.');
                 il_responseWrite(response:JSON_AsJsonText(gError));
