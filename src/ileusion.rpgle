@@ -103,10 +103,10 @@
             
           Else;
             gError = Generate_Error('Requires POST request.');
-            il_responseWrite(response:JSON_AsJsonText(gError));
           Endif;
           
           If (gError <> *NULL);
+            il_responseWrite(response:JSON_AsJsonText(gError));
             Dealloc(NE) gError;
           Endif;
           
@@ -131,7 +131,6 @@
           
           If (JSON_Error(lDocument));
             gError = Generate_Error('Error parsing JSON.');
-            il_responseWrite(response:JSON_AsJsonText(gError));
               
           Else;
           
@@ -143,7 +142,6 @@
               
               If (JSON_Error(lResultSet));
                 gError = Generate_Error(JSON_Message(lResultSet));
-                il_responseWrite(response:JSON_AsJsonText(gError));
                 
               Else;
                 lContent = JSON_AsJsonText(lResultSet);
@@ -157,7 +155,6 @@
               
             Else;
               gError = Generate_Error('Missing SQL statement.');
-              il_responseWrite(response:JSON_AsJsonText(gError));
             Endif;
             
           Endif;
@@ -235,7 +232,6 @@
           
             On-Error *All;
               gError = Generate_Error('Error parsing request.');
-              il_responseWrite(response:JSON_AsJsonText(gError));
               MakeCall = *Off;
             Endmon;
 
@@ -267,12 +263,10 @@
                 JSON_NodeDelete(lResult);
               On-Error *All;
                 gError = Generate_Error('Error calling RPG program.');
-                il_responseWrite(response:JSON_AsJsonText(gError));
               Endmon;
               
             Else;
               gError = Generate_Error('Error determining parameters.');
-              il_responseWrite(response:JSON_AsJsonText(gError));
             Endif;
             
             For lIndex = 1 to ProgramInfo.argc;
