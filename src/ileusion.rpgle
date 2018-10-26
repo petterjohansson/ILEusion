@@ -30,18 +30,20 @@
           argc    Uns(10) Value;
         End-Pr;
         
-        
-        
         // -----------------------------------------------------------------------------
         // Main
         // -----------------------------------------------------------------------------
         
         dcl-proc main;
+          Dcl-Pi *N;
+            gHost Char(15);
+            gPort Int(10);
+          End-Pi;
 
           dcl-ds config likeds(il_config);
 
-          config.port = 8008; 
-          config.host = '*ANY';
+          config.host = %TrimR(gHost);
+          config.port = gPort; 
 
           il_listen (config : %paddr(myservlet));
 
