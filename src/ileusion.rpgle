@@ -30,7 +30,7 @@
           argc    Uns(10) Value;
         End-Pr;
         
-        Dcl-S gError Pointer;
+        
         
         // -----------------------------------------------------------------------------
         // Main
@@ -60,6 +60,7 @@
           
           Dcl-S lEndpoint Varchar(128);
           Dcl-S lMethod   Varchar(10);
+          Dcl-S lError    Pointer;
           
           lEndpoint = il_getRequestResource(request);
           lMethod   = il_getRequestMethod(request);
@@ -69,18 +70,18 @@
           If (lMethod = 'POST');
             Select;
               When (lEndpoint = '/sql');
-                Handle_SQL(request:response);
+                lError = Handle_SQL(request:response);
               When (lEndpoint = '/pgm');
-                Handle_Program(request:response);
+                lError = Handle_Program(request:response);
             Endsl;
             
           Else;
-            gError = Generate_Error('Requires POST request.');
+            lError = Generate_Error('Requires POST request.');
           Endif;
           
-          If (gError <> *NULL);
-            il_responseWrite(response:JSON_AsJsonText(gError));
-            Dealloc(NE) gError;
+          If (lError <> *NULL);
+            il_responseWrite(response:JSON_AsJsonText(lError));
+            Dealloc(NE) lError;
           Endif;
           
         end-proc;
@@ -88,10 +89,12 @@
         // -----------------------------------------------------------------------------
 
         Dcl-Proc Handle_SQL;
-          dcl-pi *n;
+          dcl-pi *n Pointer; //Returns *NULL if successful
             request  likeds(il_request);
             response likeds(il_response);
           end-pi;
+          
+          Dcl-S lError     Pointer;
           
           Dcl-S lResultSet Pointer;
           Dcl-S lDocument  Pointer;
@@ -103,7 +106,7 @@
           lDocument = JSON_ParseString(lContent);
           
           If (JSON_Error(lDocument));
-            gError = Generate_Error('Error parsing JSON.');
+            lError = Generate_Error('Error parsing JSON.');
               
           Else;
           
@@ -114,7 +117,7 @@
               lResultSet = JSON_sqlResultSet(lContent);
               
               If (JSON_Error(lResultSet));
-                gError = Generate_Error(JSON_Message(lResultSet));
+                lError = Generate_Error(JSON_Message(lResultSet));
                 
               Else;
                 lContent = JSON_AsJsonText(lResultSet);
@@ -127,22 +130,25 @@
               JSON_sqlDisconnect();
               
             Else;
-              gError = Generate_Error('Missing SQL statement.');
+              lError = Generate_Error('Missing SQL statement.');
             Endif;
             
           Endif;
           
           JSON_NodeDelete(lDocument);
+          
+          return lError;
         End-Proc;
         
         // -----------------------------------------------------------------------------
         
         Dcl-Proc Handle_Program;
-          dcl-pi *n;
+          dcl-pi *n Pointer; //Returns *NULL if successful
             request  likeds(il_request);
             response likeds(il_response);
           end-pi;
           
+          Dcl-S  lError    Pointer;
           Dcl-S  lContent  Varchar(32767);
           Dcl-S  lDocument Pointer;
           Dcl-S  lResult   Pointer;
@@ -172,8 +178,8 @@
           lDocument = JSON_ParseString(lContent);
           
           If (JSON_Error(lDocument));
-              gError = Generate_Error(JSON_Message(lDocument));
-              il_responseWrite(response:JSON_AsJsonText(gError));
+              lError = Generate_Error(JSON_Message(lDocument));
+              il_responseWrite(response:JSON_AsJsonText(lError));
               
           Else;
           
@@ -204,7 +210,7 @@
               enddo;
           
             On-Error *All;
-              gError = Generate_Error('Error parsing request.');
+              lError = Generate_Error('Error parsing request.');
               MakeCall = *Off;
             Endmon;
 
@@ -237,11 +243,11 @@
                 il_responseWrite(response:lContent);
                 JSON_NodeDelete(lResult);
               On-Error *All;
-                gError = Generate_Error('Error calling RPG program.');
+                lError = Generate_Error('Error calling RPG program.');
               Endmon;
               
             Else;
-              gError = Generate_Error('Error determining parameters.');
+              lError = Generate_Error('Error determining parameters.');
             Endif;
             
             For lIndex = 1 to ProgramInfo.argc;
@@ -251,6 +257,8 @@
           Endif;
           
           JSON_NodeDelete(lDocument);
+          
+          Return lError;
         End-Proc;
         
         // -----------------------------------------------------------------------------
