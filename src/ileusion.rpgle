@@ -23,6 +23,19 @@
           Options Char(34);
           Library Pointer;
         End-Pr;
+        
+        Dcl-Pr ActivateServiceProgram Int(20) ExtProc('QleActBndPgmLong');
+          Object Pointer;
+        End-Pr;
+        
+        Dcl-Pr RetrieveFunctionPointer Pointer ExtProc('QleGetExpLong');
+          Mark          Int(20); //From ActivateServiceProgram
+          ExportNum     Int(10) Value;  //Can pass 0
+          ExportNameLen Int(10);  //Length
+          ExportName    Pointer Value Options(*String); //Name
+          rFuncPointer  Pointer; //Return pointer
+          rFuncResult   Int(10);  //Return status code
+        End-Pr;
      
         Dcl-Pr callpgmv extproc('_CALLPGMV');
           pgm_ptr Pointer;
@@ -157,18 +170,24 @@
           Dcl-DS lList     likeds(JSON_ITERATOR);
           
           Dcl-Ds ProgramInfo Qualified;
-            Library Char(10);
-            Name    Char(10);
-            argv    Pointer Dim(256) Inz(*NULL);
-            argc    Uns(3);
+            Library  Char(10);
+            Name     Char(10);
+            Function Varchar(32);
+            argv     Pointer Dim(256) Inz(*NULL);
+            argc     Uns(3);
             
             LibPtr  Pointer;
             ObjPtr  Pointer;
           End-Ds;
           
-          Dcl-S  lResParm   Pointer;
-          Dcl-S  lIndex     Uns(3);
-          Dcl-S  MakeCall   Ind Inz(*On);
+          Dcl-S lResParm   Pointer;
+          Dcl-S lIndex     Uns(3);
+          Dcl-S MakeCall   Ind Inz(*On);
+          Dcl-S IsFunction Ind Inz(*Off);
+          
+          Dcl-S lLength     Int(10);
+          Dcl-S lMark      Int(20);
+          Dcl-S lExportRes Int(10) Inz(-1);
           
           Dcl-Ds rslvsp Qualified;
             Obj_Type Char(2);
@@ -189,16 +208,37 @@
               MakeCall = *On;
               
               ProgramInfo.Library = JSON_GetStr(lDocument:'library');
-              ProgramInfo.Name    = JSON_GetStr(lDocument:'program');
+              ProgramInfo.Name    = JSON_GetStr(lDocument:'object');
               ProgramInfo.argc    = 0;
+              
+              If (JSON_Locate(lDocument:'function') <> *NULL);
+                ProgramInfo.Function = JSON_GetStr(lDocument:'function');
+                IsFunction = *On;
+              Endif;
               
               rslvsp.Obj_Type = x'0401';
               rslvsp.Obj_name = ProgramInfo.Library;
               GetLibraryPointer(ProgramInfo.LibPtr:rslvsp);
               
-              rslvsp.Obj_Type = x'0201';
+              If (IsFunction);
+                rslvsp.Obj_Type = x'0203'; //Service program
+              Else;
+                rslvsp.Obj_Type = x'0201'; //Regular program
+              Endif;
+              
               rslvsp.Obj_name = ProgramInfo.Name;
               GetObjectPointer(ProgramInfo.ObjPtr:rslvsp:ProgramInfo.LibPtr);
+              
+              If (IsFunction);
+                lLength = %Len(ProgramInfo.Function);
+                lMark = ActivateServiceProgram(ProgramInfo.ObjPtr);
+                RetrieveFunctionPointer(lMark
+                                       :0
+                                       :lLength
+                                       :ProgramInfo.Function
+                                       :ProgramInfo.ObjPtr
+                                       :lExportRes);
+              Endif;
               
               lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
               dow JSON_ForEach(lList);
@@ -220,9 +260,12 @@
             
             If (MakeCall);
               Monitor;
-                callpgmv(ProgramInfo.ObjPtr 
-                        :ProgramInfo.argv 
-                        :ProgramInfo.argc);
+                If (IsFunction);
+                Else;
+                  callpgmv(ProgramInfo.ObjPtr 
+                          :ProgramInfo.argv 
+                          :ProgramInfo.argc);
+                Endif;
                 
                 lResult = JSON_NewArray();
                 lIndex  = 0;
