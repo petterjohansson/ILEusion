@@ -117,8 +117,7 @@
           
           Dcl-S lContent   Varchar(32767);
           
-          lContent  = il_getContent(request);
-          lDocument = JSON_ParseString(lContent);
+          lDocument = JSON_ParseString(request.content.string);
           
           If (JSON_Error(lDocument));
             lError = Generate_Error('Error parsing JSON.');
@@ -128,8 +127,7 @@
             lSQLStmt = JSON_Locate(lDocument:'/query');
             If (lSQLStmt <> *NULL);
             
-              lContent = JSON_GetStr(lSQLStmt);
-              lResultSet = JSON_sqlResultSet(lContent);
+              lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt));
               
               If (JSON_Error(lResultSet));
                 lError = Generate_Error(JSON_Message(lResultSet));
@@ -196,8 +194,7 @@
             Auth     Char(2)  inz(x'0000');
           End-Ds;
           
-          lContent  = il_getContent(request);
-          lDocument = JSON_ParseString(lContent);
+          lDocument = JSON_ParseString(request.content.string);
           
           If (JSON_Error(lDocument));
               lError = Generate_Error(JSON_Message(lDocument));
