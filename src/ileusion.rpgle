@@ -86,8 +86,8 @@
             Select;
               When (lEndpoint = '/sql');
                 lError = Handle_SQL(request:response);
-              When (lEndpoint = '/pgm');
-                lError = Handle_Program(request:response);
+              When (lEndpoint = '/call');
+                lError = Handle_Call(request:response);
             Endsl;
             
           Else;
@@ -157,7 +157,7 @@
         
         // -----------------------------------------------------------------------------
         
-        Dcl-Proc Handle_Program;
+        Dcl-Proc Handle_Call;
           dcl-pi *n Pointer; //Returns *NULL if successful
             request  likeds(il_request);
             response likeds(il_response);
@@ -165,8 +165,8 @@
           
           Dcl-S  lError    Pointer;
           Dcl-S  lContent  Varchar(32767);
-          Dcl-S  lDocument Pointer;
-          Dcl-S  lResult   Pointer;
+          Dcl-S  lDocument Pointer; //Request JSON document
+          Dcl-S  lResult   Pointer; //Response JSON document
           Dcl-DS lList     likeds(JSON_ITERATOR);
           
           Dcl-Ds ProgramInfo Qualified;
@@ -177,17 +177,18 @@
             argc     Uns(3);
             
             LibPtr  Pointer;
-            ObjPtr  Pointer;
+            CallPtr Pointer;
           End-Ds;
           
-          Dcl-S lResParm   Pointer;
+          Dcl-S lResParm   Pointer; //Parameter return document
           Dcl-S lIndex     Uns(3);
-          Dcl-S MakeCall   Ind Inz(*On);
-          Dcl-S IsFunction Ind Inz(*Off);
           
-          Dcl-S lLength     Int(10);
-          Dcl-S lMark      Int(20);
-          Dcl-S lExportRes Int(10) Inz(-1);
+          Dcl-S MakeCall   Ind Inz(*On);  //Used to determine whether a valid call
+          Dcl-S IsFunction Ind Inz(*Off); //If true, func call, otherwise pgm
+          
+          Dcl-S lLength    Int(10);
+          Dcl-S lMark      Int(20); //Reference to activated srvpgm
+          Dcl-S lExportRes Int(10) Inz(-1); //Result of RetrieveFunctionPointer
           
           Dcl-Ds rslvsp Qualified;
             Obj_Type Char(2);
@@ -227,16 +228,17 @@
               Endif;
               
               rslvsp.Obj_name = ProgramInfo.Name;
-              GetObjectPointer(ProgramInfo.ObjPtr:rslvsp:ProgramInfo.LibPtr);
+              GetObjectPointer(ProgramInfo.CallPtr:rslvsp:ProgramInfo.LibPtr);
               
+              //If it's a function, then get the function pointer
               If (IsFunction);
                 lLength = %Len(ProgramInfo.Function);
-                lMark = ActivateServiceProgram(ProgramInfo.ObjPtr);
+                lMark = ActivateServiceProgram(ProgramInfo.CallPtr);
                 RetrieveFunctionPointer(lMark
                                        :0
                                        :lLength
                                        :ProgramInfo.Function
-                                       :ProgramInfo.ObjPtr
+                                       :ProgramInfo.CallPtr
                                        :lExportRes);
               Endif;
               
@@ -262,7 +264,7 @@
               Monitor;
                 If (IsFunction);
                 Else;
-                  callpgmv(ProgramInfo.ObjPtr 
+                  callpgmv(ProgramInfo.CallPtr 
                           :ProgramInfo.argv 
                           :ProgramInfo.argc);
                 Endif;
@@ -288,7 +290,7 @@
                 il_responseWrite(response:lContent);
                 JSON_NodeDelete(lResult);
               On-Error *All;
-                lError = Generate_Error('Error calling RPG program.');
+                lError = Generate_Error('Error making call.');
               Endmon;
               
             Else;
