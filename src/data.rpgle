@@ -46,6 +46,10 @@
           CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
           CurrentArg.ByteSize    = JSON_GetNum(pCurrentArg:'bytesize':0);
           CurrentArg.ArraySize   = JSON_GetNum(pCurrentArg:'arraysize':1);
+          
+          If (CurrentArg.ByteSize = 0);
+            CurrentArg.ByteSize = GetByteSize(CurrentArg);
+          Endif;
 
           If (CurrentArg.ByteSize > 0);
             lIndex = 0;
@@ -137,52 +141,8 @@
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
           CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
-          CurrentArg.ByteSize    = 0;
-
-          Select;
-            When (CurrentArg.Type = 'char');
-              CurrentArg.ByteSize = CurrentArg.Length;
-              
-            When (CurrentArg.Type = 'bool');
-              CurrentArg.ByteSize = 2;
-              
-            When (CurrentArg.Type = 'ind');
-              CurrentArg.ByteSize = 2;
-              
-            When (CurrentArg.Type = 'int');
-              Select;
-                When (CurrentArg.Length = 3);
-                  CurrentArg.ByteSize = %Size(Types.int3);
-                When (CurrentArg.Length = 5);
-                  CurrentArg.ByteSize = %Size(Types.int5);
-                When (CurrentArg.Length = 10);
-                  CurrentArg.ByteSize = %Size(Types.int10);
-                When (CurrentArg.Length = 20);
-                  CurrentArg.ByteSize = %Size(Types.int20);
-              Endsl;
-              
-            When (CurrentArg.Type = 'uns');
-              Select;
-                When (CurrentArg.Length = 3);
-                  CurrentArg.ByteSize = %Size(Types.uns3);
-                When (CurrentArg.Length = 5);
-                  CurrentArg.ByteSize = %Size(Types.uns5);
-                When (CurrentArg.Length = 10);
-                  CurrentArg.ByteSize = %Size(Types.uns10);
-                When (CurrentArg.Length = 20);
-                  CurrentArg.ByteSize = %Size(Types.uns20);
-              Endsl;
-            
-            When (CurrentArg.Type = 'float');
-              Select;
-                When (CurrentArg.Length = 4);
-                  CurrentArg.ByteSize = %Size(Types.float);
-                When (CurrentArg.Length = 8);
-                  CurrentArg.ByteSize = %Size(Types.double);
-              Endsl;
-          Endsl;
-
-
+          CurrentArg.ByteSize    = GetByteSize(CurrentArg);
+          
           If (CurrentArg.ByteSize > 0);
             JSON_SetNum(pCurrentArg:'bytesize':CurrentArg.ByteSize);
             JSON_SetNum(pCurrentArg:'arraysize':CurrentArg.ArraySize);
@@ -197,6 +157,61 @@
           Endif;
 
           Return lResult;
+        End-Proc;
+          
+        // -----------------------------------------------------------------------------
+        
+        Dcl-Proc GetByteSize;
+          Dcl-Pi *N Int(5);
+            pCurrentArg LikeDS(CurrentArg_T);
+          End-Pi;
+          
+          Dcl-S ByteSize Int(5) Inz(0);
+          
+          Select;
+            When (pCurrentArg.Type = 'char');
+              ByteSize = pCurrentArg.Length;
+              
+            When (pCurrentArg.Type = 'bool');
+              ByteSize = 2;
+              
+            When (pCurrentArg.Type = 'ind');
+              ByteSize = 2;
+              
+            When (pCurrentArg.Type = 'int');
+              Select;
+                When (pCurrentArg.Length = 3);
+                  ByteSize = %Size(Types.int3);
+                When (pCurrentArg.Length = 5);
+                  ByteSize = %Size(Types.int5);
+                When (pCurrentArg.Length = 10);
+                  ByteSize = %Size(Types.int10);
+                When (pCurrentArg.Length = 20);
+                  ByteSize = %Size(Types.int20);
+              Endsl;
+              
+            When (pCurrentArg.Type = 'uns');
+              Select;
+                When (pCurrentArg.Length = 3);
+                  ByteSize = %Size(Types.uns3);
+                When (pCurrentArg.Length = 5);
+                  ByteSize = %Size(Types.uns5);
+                When (pCurrentArg.Length = 10);
+                  ByteSize = %Size(Types.uns10);
+                When (pCurrentArg.Length = 20);
+                  ByteSize = %Size(Types.uns20);
+              Endsl;
+            
+            When (pCurrentArg.Type = 'float');
+              Select;
+                When (pCurrentArg.Length = 4);
+                  ByteSize = %Size(Types.float);
+                When (pCurrentArg.Length = 8);
+                  ByteSize = %Size(Types.double);
+              Endsl;
+          Endsl;
+          
+          Return ByteSize;
         End-Proc;
         
         // -----------------------------------------------------------------------------

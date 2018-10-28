@@ -11,14 +11,14 @@ all: lib modules program cmds
 lib:
 	-system -q "CRTLIB $(BIN_LIB) TYPE(*PROD) TEXT('ILEusion')"
 
-modules: ileusion.rpgle data.rpgle
+modules: ileusion.rpgle data.rpgle callfunc.rpgle
 
 program:
 	qsh <<EOF
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/DATA) BNDDIR(JSONXML ILEASTIC)"
+	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC) BNDDIR(JSONXML ILEASTIC)"
 	EOF
 	
 cmds:

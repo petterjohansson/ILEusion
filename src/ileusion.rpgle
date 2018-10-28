@@ -12,6 +12,7 @@
         /include ./headers/ILEastic.rpgle
         /include ./headers/jsonparser.rpgle
         /include ./headers/data_h.rpgle
+        /include ./headers/callfunc_h.rpgle
         
         Dcl-Pr GetLibraryPointer extproc('_RSLVSP2');
           Object  Pointer;
@@ -164,7 +165,8 @@
           Dcl-S  lError    Pointer;
           Dcl-S  lContent  Varchar(32767);
           Dcl-S  lDocument Pointer; //Request JSON document
-          Dcl-S  lResult   Pointer; //Response JSON document
+          Dcl-S  lArray    Pointer; //Params array JSON document
+          Dcl-S  lResponse Pointer; //Response JSON document
           Dcl-DS lList     likeds(JSON_ITERATOR);
           
           Dcl-Ds ProgramInfo Qualified;
@@ -187,6 +189,7 @@
           Dcl-S lLength    Int(10);
           Dcl-S lMark      Int(20); //Reference to activated srvpgm
           Dcl-S lExportRes Int(10) Inz(-1); //Result of RetrieveFunctionPointer
+          Dcl-S lFuncRes   Pointer; //Function result
           
           Dcl-Ds rslvsp Qualified;
             Obj_Type Char(2);
@@ -260,13 +263,16 @@
             If (MakeCall);
               Monitor;
                 If (IsFunction);
+                  lFuncRes = callfunc(ProgramInfo.CallPtr 
+                                     :ProgramInfo.argv 
+                                     :ProgramInfo.argc);
                 Else;
                   callpgmv(ProgramInfo.CallPtr 
                           :ProgramInfo.argv 
                           :ProgramInfo.argc);
                 Endif;
                 
-                lResult = JSON_NewArray();
+                lArray = JSON_NewArray();
                 lIndex  = 0;
                 
                 lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
@@ -276,16 +282,33 @@
                   lResParm = Get_Result(lList.this:ProgramInfo.argv(lIndex));
                   
                   If (JSON_GetLength(lResParm) = 1);
-                    JSON_ArrayPush(lResult:JSON_GetChild(lResParm));
+                    JSON_ArrayPush(lArray:JSON_GetChild(lResParm));
                   Else;
-                    JSON_ArrayPush(lResult:lResParm);
+                    JSON_ArrayPush(lArray:lResParm);
                   Endif;
                        
                 enddo;
                 
-                lContent = JSON_AsJsonText(lResult);
+                lResponse = JSON_NewObject();
+                
+                JSON_SetPtr(lResponse:'args':lArray);
+                
+                If (IsFunction);
+                  lResParm = JSON_Locate(lDocument:'result');
+                  lResParm = Get_Result(lResParm
+                                       :lFuncRes);
+                                       
+                  If (JSON_GetLength(lResParm) = 1);
+                    JSON_SetPtr(lResponse:'result':JSON_GetChild(lResParm));
+                  Else;
+                    JSON_SetPtr(lResponse:'result':lResParm);
+                  Endif;
+                Endif;
+                
+                lContent = JSON_AsJsonText(lArray);
                 il_responseWrite(response:lContent);
-                JSON_NodeDelete(lResult);
+                JSON_NodeDelete(lArray);
+                JSON_NodeDelete(lResponse);
               On-Error *All;
                 lError = Generate_Error('Error making call.');
               Endmon;
@@ -309,7 +332,7 @@
         
         Dcl-Proc Generate_Error;
           Dcl-Pi *N Pointer;
-            pMessage Varchar(50) Const;
+            pMessage Pointer Value Options(*String);
           End-Pi;
           
           Dcl-S lResult Pointer;
