@@ -44,6 +44,15 @@
           argc    Uns(10) Value;
         End-Pr;
         
+        Dcl-Pr DQSend ExtPgm('QSNDDTAQ');
+          Object  Char(10);
+          Library Char(10);
+          DataLen Packed(5);
+          Data    Pointer;
+          KeyLen  Packed(3) Options(*NoPass);
+          Key     Pointer   Options(*NoPass);
+        End-Pr;
+        
         // -----------------------------------------------------------------------------
         // Main
         // -----------------------------------------------------------------------------
@@ -89,6 +98,8 @@
                 lError = Handle_SQL(request:response);
               When (lEndpoint = '/call');
                 lError = Handle_Call(request:response);
+              When (lEndpoint = '/dq/send');
+                lError = Handle_DataQueue_Send(request:response);
             Endsl;
             
           Else;
@@ -177,7 +188,7 @@
             argc     Uns(3);
             
             LibPtr  Pointer;
-            CallPtr Pointer;
+            CallPtr Pointer; //Pointer to object or function
           End-Ds;
           
           Dcl-S lResParm   Pointer; //Parameter return document
@@ -201,7 +212,6 @@
           
           If (JSON_Error(lDocument));
               lError = Generate_Error(JSON_Message(lDocument));
-              il_responseWrite(response:JSON_AsJsonText(lError));
               
           Else;
           
@@ -324,6 +334,69 @@
           Endif;
           
           JSON_NodeDelete(lDocument);
+          
+          Return lError;
+        End-Proc;
+        
+        Dcl-Proc Handle_DataQueue_Send;
+          dcl-pi *n Pointer; //Returns *NULL if successful
+            request  likeds(il_request);
+            response likeds(il_response);
+          end-pi;
+          
+          Dcl-S lError    Pointer Inz(*NULL);
+          Dcl-S lDocument Pointer;
+          Dcl-S lResponse Pointer;
+          Dcl-S lContent  Varchar(128);
+          
+          Dcl-Ds DQInfo Qualified;
+            Library Char(10);
+            Object  Char(10);
+            DataLen Packed(5);
+            DataPtr Pointer;
+            KeyLen  Packed(3);
+            KeyPtr  Pointer;
+          End-Ds;
+          
+          lDocument = JSON_ParseString(request.content.string);
+          
+          If (JSON_Error(lDocument));
+            lError = Generate_Error(JSON_Message(lDocument));
+              
+          Else;
+            DQInfo.Library = JSON_GetStr(lDocument:'library':'');
+            DQInfo.Object  = JSON_GetStr(lDocument:'object':'');
+            DQInfo.DataLen = %Len(JSON_GetStr(lDocument:'data':''));
+            DQInfo.DataPtr = JSON_GetValuePtr(lDocument:'data');
+            DQInfo.KeyLen  = %Len(JSON_GetStr(lDocument:'key':''));
+            DQInfo.KeyPtr  = JSON_GetValuePtr(lDocument:'key');
+            
+            Monitor;
+              If (DQInfo.KeyLen = 0); //No key
+                DQSend(DQInfo.Object
+                      :DQInfo.Library
+                      :DQInfo.DataLen
+                      :DQInfo.DataPtr);
+              Else;
+                DQSend(DQInfo.Object
+                      :DQInfo.Library
+                      :DQInfo.DataLen
+                      :DQInfo.DataPtr
+                      :DQInfo.KeyLen
+                      :DQInfo.KeyPtr);
+              Endif;
+              
+              //json_GetValuePtr
+              lResponse = JSON_NewObject();
+              JSON_SetBool(lResponse:'success':*On);
+              
+              lContent = JSON_AsJsonText(lResponse);
+              il_responseWrite(response:lContent);
+            On-Error *All;
+              lError = Generate_Error('Error sending to data queue.');
+            Endmon;
+            
+          Endif;
           
           Return lError;
         End-Proc;
