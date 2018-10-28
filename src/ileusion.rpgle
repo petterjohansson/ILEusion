@@ -53,6 +53,17 @@
           Key     Pointer   Options(*NoPass);
         End-Pr;
         
+        Dcl-Pr DQPop ExtPgm('QRCVDTAQ');
+          Object   Char(10);
+          Library  Char(10);
+          DataLen  Packed(5);
+          Data     Pointer;
+          WaitTime Packed(5);
+          KeyOrder Char(2)   Options(*NoPass);
+          KeyLen   Packed(3) Options(*NoPass);
+          Key      Pointer   Options(*NoPass);
+        End-Pr;
+        
         // -----------------------------------------------------------------------------
         // Main
         // -----------------------------------------------------------------------------
@@ -100,6 +111,8 @@
                 lError = Handle_Call(request:response);
               When (lEndpoint = '/dq/send');
                 lError = Handle_DataQueue_Send(request:response);
+              When (lEndpoint = '/dq/pop');
+                lError = Handle_DataQueue_Pop(request:response);
             Endsl;
             
           Else;
@@ -338,6 +351,8 @@
           Return lError;
         End-Proc;
         
+        // -----------------------------------------------------------------------------
+        
         Dcl-Proc Handle_DataQueue_Send;
           dcl-pi *n Pointer; //Returns *NULL if successful
             request  likeds(il_request);
@@ -389,6 +404,77 @@
               //json_GetValuePtr
               lResponse = JSON_NewObject();
               JSON_SetBool(lResponse:'success':*On);
+              
+              lContent = JSON_AsJsonText(lResponse);
+              il_responseWrite(response:lContent);
+            On-Error *All;
+              lError = Generate_Error('Error sending to data queue.');
+            Endmon;
+            
+          Endif;
+          
+          Return lError;
+        End-Proc;
+        
+        // -----------------------------------------------------------------------------
+        
+        Dcl-Proc Handle_DataQueue_Pop;
+          dcl-pi *n Pointer; //Returns *NULL if successful
+            request  likeds(il_request);
+            response likeds(il_response);
+          end-pi;
+          
+          Dcl-S lError    Pointer Inz(*NULL);
+          Dcl-S lDocument Pointer;
+          Dcl-S lResponse Pointer;
+          Dcl-S lContent  Varchar(32767);
+          
+          Dcl-Ds DQInfo Qualified;
+            Library  Char(10);
+            Object   Char(10);
+            DataLen  Packed(5);
+            DataPtr  Pointer;
+            Waittime Packed(5);
+            KeyOrder Char(2);
+            KeyLen   Packed(3);
+            KeyPtr   Pointer;
+          End-Ds;
+          
+          lDocument = JSON_ParseString(request.content.string);
+          
+          If (JSON_Error(lDocument));
+            lError = Generate_Error(JSON_Message(lDocument));
+              
+          Else;
+            DQInfo.Library  = JSON_GetStr(lDocument:'library':'');
+            DQInfo.Object   = JSON_GetStr(lDocument:'object':'');
+            DQInfo.Waittime = JSON_GetNum(lDocument:'waittime':0);
+            DQInfo.KeyOrder = JSON_GetStr(lDocument:'keyorder':'EQ');
+            DQInfo.KeyLen   = %Len(JSON_GetStr(lDocument:'key':''));
+            DQInfo.KeyPtr   = JSON_GetValuePtr(lDocument:'key');
+            
+            Monitor;
+              If (DQInfo.KeyLen = 0); //No key
+                DQPop(DQInfo.Object
+                      :DQInfo.Library
+                      :DQInfo.DataLen
+                      :DQInfo.DataPtr
+                      :DQInfo.Waittime);
+              Else;
+                DQPop(DQInfo.Object
+                      :DQInfo.Library
+                      :DQInfo.DataLen
+                      :DQInfo.DataPtr
+                      :DQInfo.Waittime
+                      :DQInfo.KeyOrder
+                      :DQInfo.KeyLen
+                      :DQInfo.KeyPtr);
+              Endif;
+              
+              //json_GetValuePtr
+              lResponse = JSON_NewObject();
+              JSON_SetBool(lResponse:'success':*On);
+              JSON_SetStr(lResponse:'value':DQInfo.DataPtr);
               
               lContent = JSON_AsJsonText(lResponse);
               il_responseWrite(response:lContent);
