@@ -44,6 +44,8 @@
           argc    Uns(10) Value;
         End-Pr;
         
+        Dcl-C DQ_LEN 16384;
+        
         Dcl-Pr DQSend ExtPgm('QSNDDTAQ');
           Object  Char(10);
           Library Char(10);
@@ -57,7 +59,7 @@
           Object   Char(10);
           Library  Char(10);
           DataLen  Packed(5);
-          Data     Pointer;
+          Data     Char(DQ_LEN);
           WaitTime Packed(5);
           KeyOrder Char(2)   Options(*NoPass);
           KeyLen   Packed(3) Options(*NoPass);
@@ -381,10 +383,12 @@
           Else;
             DQInfo.Library = JSON_GetStr(lDocument:'library':'');
             DQInfo.Object  = JSON_GetStr(lDocument:'object':'');
+            
             DQInfo.DataLen = %Len(JSON_GetStr(lDocument:'data':''));
-            DQInfo.DataPtr = JSON_GetValuePtr(lDocument:'data');
+            DQInfo.DataPtr = JSON_GetValuePtr(JSON_Locate(lDocument:'data'));
+            
             DQInfo.KeyLen  = %Len(JSON_GetStr(lDocument:'key':''));
-            DQInfo.KeyPtr  = JSON_GetValuePtr(lDocument:'key');
+            DQInfo.KeyPtr = JSON_GetValuePtr(JSON_Locate(lDocument:'key'));
             
             Monitor;
               If (DQInfo.KeyLen = 0); //No key
@@ -440,6 +444,8 @@
             KeyPtr   Pointer;
           End-Ds;
           
+          Dcl-S DataChar Char(DQ_LEN) Based(DQInfo.DataPtr);
+          
           lDocument = JSON_ParseString(request.content.string);
           
           If (JSON_Error(lDocument));
@@ -448,23 +454,26 @@
           Else;
             DQInfo.Library  = JSON_GetStr(lDocument:'library':'');
             DQInfo.Object   = JSON_GetStr(lDocument:'object':'');
+            DQInfo.DataLen  = JSON_GetNum(lDocument:'length':128);
             DQInfo.Waittime = JSON_GetNum(lDocument:'waittime':0);
             DQInfo.KeyOrder = JSON_GetStr(lDocument:'keyorder':'EQ');
             DQInfo.KeyLen   = %Len(JSON_GetStr(lDocument:'key':''));
             DQInfo.KeyPtr   = JSON_GetValuePtr(lDocument:'key');
+            
+            DQInfo.DataPtr = %Alloc(DQInfo.DataLen + 1);
             
             Monitor;
               If (DQInfo.KeyLen = 0); //No key
                 DQPop(DQInfo.Object
                       :DQInfo.Library
                       :DQInfo.DataLen
-                      :DQInfo.DataPtr
+                      :DataChar
                       :DQInfo.Waittime);
               Else;
                 DQPop(DQInfo.Object
                       :DQInfo.Library
                       :DQInfo.DataLen
-                      :DQInfo.DataPtr
+                      :DataChar
                       :DQInfo.Waittime
                       :DQInfo.KeyOrder
                       :DQInfo.KeyLen
@@ -474,6 +483,7 @@
               //json_GetValuePtr
               lResponse = JSON_NewObject();
               JSON_SetBool(lResponse:'success':*On);
+              JSON_SetNum(lResponse:'length':DQInfo.DataLen);
               JSON_SetStr(lResponse:'value':DQInfo.DataPtr);
               
               lContent = JSON_AsJsonText(lResponse);
