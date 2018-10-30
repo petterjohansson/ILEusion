@@ -142,8 +142,6 @@
           Dcl-S lDocument  Pointer;
           Dcl-S lSQLStmt   Pointer;
           
-          Dcl-S lContent   Varchar(32767);
-          
           lDocument = JSON_ParseString(request.content.string);
           
           If (JSON_Error(lDocument));
@@ -160,8 +158,7 @@
                 lError = Generate_Error(JSON_Message(lResultSet));
                 
               Else;
-                lContent = JSON_AsJsonText(lResultSet);
-                il_responseWrite(response:lContent);
+                il_responseWrite(response:JSON_AsJsonText(lResultSet));
                 //il_responseWriteStream(response : JSON_stream(lResultSet));
                 
                 JSON_NodeDelete(lResultSet);
@@ -189,7 +186,6 @@
           end-pi;
           
           Dcl-S  lError    Pointer;
-          Dcl-S  lContent  Varchar(32767);
           Dcl-S  lDocument Pointer; //Request JSON document
           Dcl-S  lArray    Pointer; //Params array JSON document
           Dcl-S  lResponse Pointer; //Response JSON document
@@ -318,7 +314,7 @@
                 
                 JSON_SetPtr(lResponse:'args':lArray);
                 
-                If (IsFunction);
+                If (IsFunction); //If it's a function, get the result!
                   lResParm = JSON_Locate(lDocument:'result');
                   lResParm = Get_Result(lResParm
                                        :lFuncRes);
@@ -330,8 +326,7 @@
                   Endif;
                 Endif;
                 
-                lContent = JSON_AsJsonText(lArray);
-                il_responseWrite(response:lContent);
+                il_responseWrite(response:JSON_AsJsonText(lResponse));
                 JSON_NodeDelete(lArray);
                 JSON_NodeDelete(lResponse);
               On-Error *All;
@@ -364,7 +359,6 @@
           Dcl-S lError    Pointer Inz(*NULL);
           Dcl-S lDocument Pointer;
           Dcl-S lResponse Pointer;
-          Dcl-S lContent  Varchar(128);
           
           Dcl-Ds DQInfo Qualified;
             Library Char(10);
@@ -409,8 +403,7 @@
               lResponse = JSON_NewObject();
               JSON_SetBool(lResponse:'success':*On);
               
-              lContent = JSON_AsJsonText(lResponse);
-              il_responseWrite(response:lContent);
+              il_responseWrite(response:JSON_AsJsonText(lResponse));
             On-Error *All;
               lError = Generate_Error('Error sending to data queue.');
             Endmon;
@@ -431,7 +424,6 @@
           Dcl-S lError    Pointer Inz(*NULL);
           Dcl-S lDocument Pointer;
           Dcl-S lResponse Pointer;
-          Dcl-S lContent  Varchar(32767);
           
           Dcl-Ds DQInfo Qualified;
             Library  Char(10);
@@ -486,8 +478,7 @@
               JSON_SetNum(lResponse:'length':DQInfo.DataLen);
               JSON_SetStr(lResponse:'value':DQInfo.DataPtr);
               
-              lContent = JSON_AsJsonText(lResponse);
-              il_responseWrite(response:lContent);
+              il_responseWrite(response:JSON_AsJsonText(lResponse));
             On-Error *All;
               lError = Generate_Error('Error sending to data queue.');
             Endmon;
