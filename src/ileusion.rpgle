@@ -50,7 +50,7 @@
           Object  Char(10);
           Library Char(10);
           DataLen Packed(5);
-          Data    Pointer;
+          Data    Char(DQ_LEN);
           KeyLen  Packed(3) Options(*NoPass);
           Key     Pointer   Options(*NoPass);
         End-Pr;
@@ -361,12 +361,12 @@
           Dcl-S lResponse Pointer;
           
           Dcl-Ds DQInfo Qualified;
-            Library Char(10);
-            Object  Char(10);
-            DataLen Packed(5);
-            DataPtr Pointer;
-            KeyLen  Packed(3);
-            KeyPtr  Pointer;
+            Library  Char(10);
+            Object   Char(10);
+            DataLen  Packed(5);
+            DataChar Char(DQ_LEN);
+            KeyLen   Packed(3);
+            KeyPtr   Pointer;
           End-Ds;
           
           lDocument = JSON_ParseString(request.content.string);
@@ -378,8 +378,8 @@
             DQInfo.Library = JSON_GetStr(lDocument:'library':'');
             DQInfo.Object  = JSON_GetStr(lDocument:'object':'');
             
-            DQInfo.DataLen = %Len(JSON_GetStr(lDocument:'data':''));
-            DQInfo.DataPtr = JSON_GetValuePtr(JSON_Locate(lDocument:'data'));
+            DQInfo.DataLen  = %Len(JSON_GetStr(lDocument:'data':''));
+            DQInfo.DataChar = JSON_GetStr(lDocument:'data':'');
             
             DQInfo.KeyLen  = %Len(JSON_GetStr(lDocument:'key':''));
             DQInfo.KeyPtr = JSON_GetValuePtr(JSON_Locate(lDocument:'key'));
@@ -389,12 +389,12 @@
                 DQSend(DQInfo.Object
                       :DQInfo.Library
                       :DQInfo.DataLen
-                      :DQInfo.DataPtr);
+                      :DQInfo.DataChar);
               Else;
                 DQSend(DQInfo.Object
                       :DQInfo.Library
                       :DQInfo.DataLen
-                      :DQInfo.DataPtr
+                      :DQInfo.DataChar
                       :DQInfo.KeyLen
                       :DQInfo.KeyPtr);
               Endif;
@@ -429,14 +429,12 @@
             Library  Char(10);
             Object   Char(10);
             DataLen  Packed(5);
-            DataPtr  Pointer;
+            DataChar Char(DQ_LEN);
             Waittime Packed(5);
             KeyOrder Char(2);
             KeyLen   Packed(3);
             KeyPtr   Pointer;
           End-Ds;
-          
-          Dcl-S DataChar Char(DQ_LEN) Based(DQInfo.DataPtr);
           
           lDocument = JSON_ParseString(request.content.string);
           
@@ -446,26 +444,23 @@
           Else;
             DQInfo.Library  = JSON_GetStr(lDocument:'library':'');
             DQInfo.Object   = JSON_GetStr(lDocument:'object':'');
-            DQInfo.DataLen  = JSON_GetNum(lDocument:'length':128);
             DQInfo.Waittime = JSON_GetNum(lDocument:'waittime':0);
             DQInfo.KeyOrder = JSON_GetStr(lDocument:'keyorder':'EQ');
             DQInfo.KeyLen   = %Len(JSON_GetStr(lDocument:'key':''));
             DQInfo.KeyPtr   = JSON_GetValuePtr(lDocument:'key');
-            
-            DQInfo.DataPtr = %Alloc(DQInfo.DataLen + 1);
             
             Monitor;
               If (DQInfo.KeyLen = 0); //No key
                 DQPop(DQInfo.Object
                       :DQInfo.Library
                       :DQInfo.DataLen
-                      :DataChar
+                      :DQInfo.DataChar
                       :DQInfo.Waittime);
               Else;
                 DQPop(DQInfo.Object
                       :DQInfo.Library
                       :DQInfo.DataLen
-                      :DataChar
+                      :DQInfo.DataChar
                       :DQInfo.Waittime
                       :DQInfo.KeyOrder
                       :DQInfo.KeyLen
@@ -476,7 +471,8 @@
               lResponse = JSON_NewObject();
               JSON_SetBool(lResponse:'success':*On);
               JSON_SetNum(lResponse:'length':DQInfo.DataLen);
-              JSON_SetStr(lResponse:'value':DQInfo.DataPtr);
+              JSON_SetStr(lResponse:'value':%Subst(DQInfo.DataChar
+                                                  :1:DQInfo.DataLen));
               
               il_responseWrite(response:JSON_AsJsonText(lResponse));
             On-Error *All;
