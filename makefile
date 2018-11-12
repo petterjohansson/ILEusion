@@ -35,3 +35,6 @@ cmds:
 
 %.rpgle:
 	system -q "CRTRPGMOD MODULE($(BIN_LIB)/$*) SRCSTMF('./src/$*.rpgle') DBGVIEW($(DBGVIEW)) REPLACE(*YES)" | grep '*RNF' | grep -v '*RNF7031' | sed  "s!*!$@: &!"
+	
+all:
+	@echo "Build finished!"

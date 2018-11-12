@@ -263,6 +263,7 @@
                                        :lExportRes);
               Endif;
               
+              //Now generate the parameters.
               lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
               dow JSON_ForEach(lList);
                 ProgramInfo.argc += 1;
@@ -283,6 +284,8 @@
             
             If (MakeCall);
               Monitor;
+                il_enterThreadSerialize();
+                
                 If (IsFunction);
                   lFuncRes = callfunc(ProgramInfo.CallPtr 
                                      :ProgramInfo.argv 
@@ -293,9 +296,12 @@
                           :ProgramInfo.argc);
                 Endif;
                 
+                il_exitThreadSerialize();
+                
                 lArray = JSON_NewArray();
                 lIndex  = 0;
                 
+                //Get the parameters back out incase they have changed (by ref)
                 lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
                 dow JSON_ForEach(lList);
                   lIndex += 1;
@@ -314,7 +320,8 @@
                 
                 JSON_SetPtr(lResponse:'args':lArray);
                 
-                If (IsFunction); //If it's a function, get the result!
+                //If it's a function, get the result!
+                If (IsFunction);
                   lResParm = JSON_Locate(lDocument:'result');
                   lResParm = Get_Result(lResParm
                                        :lFuncRes);
@@ -337,6 +344,7 @@
               lError = Generate_Error('Error determining parameters.');
             Endif;
             
+            //Also deallocate everything :)
             For lIndex = 1 to ProgramInfo.argc;
               Dealloc ProgramInfo.argv(lIndex);
             Endfor;
