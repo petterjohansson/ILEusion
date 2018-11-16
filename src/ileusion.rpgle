@@ -20,7 +20,7 @@
         End-Pr;
         
         Dcl-Pr GetObjectPointer extproc('_RSLVSP4');
-          Object  Pointer;
+          Object  Poiner;
           Options Char(34);
           Library Pointer;
         End-Pr;
