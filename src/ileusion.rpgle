@@ -98,54 +98,61 @@
           
           Dcl-S lEndpoint Varchar(128);
           Dcl-S lMethod   Varchar(10);
-          Dcl-S lError    Pointer;
+          Dcl-S lDocument Pointer;
+          Dcl-S lResponse Pointer;
           
           lEndpoint = il_getRequestResource(request);
           lMethod   = il_getRequestMethod(request);
           
           response.contentType = 'application/json';
           
-          If (lMethod = 'POST');
-            Select;
-              When (lEndpoint = '/sql');
-                lError = Handle_SQL(request:response);
-              When (lEndpoint = '/call');
-                lError = Handle_Call(request:response);
-              When (lEndpoint = '/dq/send');
-                lError = Handle_DataQueue_Send(request:response);
-              When (lEndpoint = '/dq/pop');
-                lError = Handle_DataQueue_Pop(request:response);
-            Endsl;
+          lDocument = JSON_ParseString(request.content.string);
+          If (JSON_Error(lDocument));
+            lResponse = Generate_Error('Error parsing JSON.');
             
           Else;
-            lError = Generate_Error('Requires POST request.');
+          
+	          If (lMethod = 'POST');
+	            Select;
+	              When (lEndpoint = '/sql');
+	                lResponse = Handle_SQL(lDocument);
+	              When (lEndpoint = '/call');
+	                lResponse = Handle_Call(lDocument);
+	              When (lEndpoint = '/dq/send');
+	                lResponse = Handle_DataQueue_Send(lDocument);
+	              When (lEndpoint = '/dq/pop');
+	                lResponse = Handle_DataQueue_Pop(lDocument);
+	            Endsl;
+	            
+	          Else;
+	            lResponse = Generate_Error('Requires POST request.');
+	          Endif;
+	          
           Endif;
           
-          If (lError <> *NULL);
-            il_responseWrite(response:JSON_AsJsonText(lError));
-            Dealloc(NE) lError;
+          If (lResponse <> *NULL);
+            il_responseWrite(response:JSON_AsJsonText(lResponse));
+            JSON_NodeDelete(lResponse);
           Endif;
+          
+          JSON_NodeDelete(lDocument);
           
         end-proc;
         
         // -----------------------------------------------------------------------------
 
         Dcl-Proc Handle_SQL;
-          dcl-pi *n Pointer; //Returns *NULL if successful
-            request  likeds(il_request);
-            response likeds(il_response);
+          dcl-pi *n Pointer;
+            lDocument Pointer;
           end-pi;
           
-          Dcl-S lError     Pointer;
+          Dcl-S lResult    Pointer;
           
           Dcl-S lResultSet Pointer;
-          Dcl-S lDocument  Pointer;
           Dcl-S lSQLStmt   Pointer;
           
-          lDocument = JSON_ParseString(request.content.string);
-          
           If (JSON_Error(lDocument));
-            lError = Generate_Error('Error parsing JSON.');
+            lResult = Generate_Error('Error parsing JSON.');
               
           Else;
           
@@ -155,38 +162,30 @@
               lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt));
               
               If (JSON_Error(lResultSet));
-                lError = Generate_Error(JSON_Message(lResultSet));
+                lResult = Generate_Error(JSON_Message(lResultSet));
                 
               Else;
-                il_responseWrite(response:JSON_AsJsonText(lResultSet));
-                //il_responseWriteStream(response : JSON_stream(lResultSet));
-                
-                JSON_NodeDelete(lResultSet);
+                lResult = lResultSet;
               Endif;
               
               JSON_sqlDisconnect();
               
             Else;
-              lError = Generate_Error('Missing SQL statement.');
+              lResult = Generate_Error('Missing SQL statement.');
             Endif;
             
           Endif;
           
-          JSON_NodeDelete(lDocument);
-          
-          return lError;
+          return lResult;
         End-Proc;
         
         // -----------------------------------------------------------------------------
         
         Dcl-Proc Handle_Call;
-          dcl-pi *n Pointer; //Returns *NULL if successful
-            request  likeds(il_request);
-            response likeds(il_response);
+          dcl-pi *n Pointer;
+            lDocument Pointer;
           end-pi;
           
-          Dcl-S  lError    Pointer;
-          Dcl-S  lDocument Pointer; //Request JSON document
           Dcl-S  lArray    Pointer; //Params array JSON document
           Dcl-S  lResponse Pointer; //Response JSON document
           Dcl-DS lList     likeds(JSON_ITERATOR);
@@ -219,153 +218,133 @@
             Auth     Char(2)  inz(x'0000');
           End-Ds;
           
-          lDocument = JSON_ParseString(request.content.string);
-          
-          If (JSON_Error(lDocument));
-              lError = Generate_Error(JSON_Message(lDocument));
-              
-          Else;
-          
-            Monitor;
-              MakeCall = *On;
-              
-              ProgramInfo.Library = JSON_GetStr(lDocument:'library');
-              ProgramInfo.Name    = JSON_GetStr(lDocument:'object');
-              ProgramInfo.argc    = 0;
-              
-              If (JSON_Locate(lDocument:'function') <> *NULL);
-                ProgramInfo.Function = JSON_GetStr(lDocument:'function');
-                IsFunction = *On;
-              Endif;
-              
-              rslvsp.Obj_Type = x'0401';
-              rslvsp.Obj_name = ProgramInfo.Library;
-              GetLibraryPointer(ProgramInfo.LibPtr:rslvsp);
-              
-              If (IsFunction);
-                rslvsp.Obj_Type = x'0203'; //Service program
-              Else;
-                rslvsp.Obj_Type = x'0201'; //Regular program
-              Endif;
-              
-              rslvsp.Obj_name = ProgramInfo.Name;
-              GetObjectPointer(ProgramInfo.CallPtr:rslvsp:ProgramInfo.LibPtr);
-              
-              //If it's a function, then get the function pointer
-              If (IsFunction);
-                lLength = %Len(ProgramInfo.Function);
-                lMark = ActivateServiceProgram(ProgramInfo.CallPtr);
-                RetrieveFunctionPointer(lMark
-                                       :0
-                                       :lLength
-                                       :ProgramInfo.Function
-                                       :ProgramInfo.CallPtr
-                                       :lExportRes);
-              Endif;
-              
-              //Now generate the parameters.
-              lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
-              dow JSON_ForEach(lList);
-                ProgramInfo.argc += 1;
-                ProgramInfo.argv(ProgramInfo.argc) = Generate_Data(lList.this);
-                
-                If (ProgramInfo.argv(ProgramInfo.argc) = *NULL);
-                  MakeCall = *Off;
-                  Leave;
-                Endif;
-              enddo;
-          
-            On-Error *All;
-              lError = Generate_Error('Error parsing request.');
-              MakeCall = *Off;
-            Endmon;
-
-            //**************************
+          Monitor;
+            MakeCall = *On;
             
-            If (MakeCall);
-              Monitor;
-                il_enterThreadSerialize();
-                
-                If (IsFunction);
-                  lFuncRes = callfunc(ProgramInfo.CallPtr 
-                                     :ProgramInfo.argv 
-                                     :ProgramInfo.argc);
-                Else;
-                  callpgmv(ProgramInfo.CallPtr 
-                          :ProgramInfo.argv 
-                          :ProgramInfo.argc);
-                Endif;
-                
-                il_exitThreadSerialize();
-                
-                lArray = JSON_NewArray();
-                lIndex  = 0;
-                
-                //Get the parameters back out incase they have changed (by ref)
-                lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
-                dow JSON_ForEach(lList);
-                  lIndex += 1;
-                  
-                  lResParm = Get_Result(lList.this:ProgramInfo.argv(lIndex));
-                  
-                  If (JSON_GetLength(lResParm) = 1);
-                    JSON_ArrayPush(lArray:JSON_GetChild(lResParm));
-                  Else;
-                    JSON_ArrayPush(lArray:lResParm);
-                  Endif;
-                       
-                enddo;
-                
-                lResponse = JSON_NewObject();
-                
-                JSON_SetPtr(lResponse:'args':lArray);
-                
-                //If it's a function, get the result!
-                If (IsFunction);
-                  lResParm = JSON_Locate(lDocument:'result');
-                  lResParm = Get_Result(lResParm
-                                       :lFuncRes);
-                                       
-                  If (JSON_GetLength(lResParm) = 1);
-                    JSON_SetPtr(lResponse:'result':JSON_GetChild(lResParm));
-                  Else;
-                    JSON_SetPtr(lResponse:'result':lResParm);
-                  Endif;
-                Endif;
-                
-                il_responseWrite(response:JSON_AsJsonText(lResponse));
-                JSON_NodeDelete(lArray);
-                JSON_NodeDelete(lResponse);
-              On-Error *All;
-                lError = Generate_Error('Error making call.');
-              Endmon;
-              
-            Else;
-              lError = Generate_Error('Error determining parameters.');
+            ProgramInfo.Library = JSON_GetStr(lDocument:'library');
+            ProgramInfo.Name    = JSON_GetStr(lDocument:'object');
+            ProgramInfo.argc    = 0;
+            
+            If (JSON_Locate(lDocument:'function') <> *NULL);
+              ProgramInfo.Function = JSON_GetStr(lDocument:'function');
+              IsFunction = *On;
             Endif;
             
-            //Also deallocate everything :)
-            For lIndex = 1 to ProgramInfo.argc;
-              Dealloc ProgramInfo.argv(lIndex);
-            Endfor;
+            rslvsp.Obj_Type = x'0401';
+            rslvsp.Obj_name = ProgramInfo.Library;
+            GetLibraryPointer(ProgramInfo.LibPtr:rslvsp);
+            
+            If (IsFunction);
+              rslvsp.Obj_Type = x'0203'; //Service program
+            Else;
+              rslvsp.Obj_Type = x'0201'; //Regular program
+            Endif;
+            
+            rslvsp.Obj_name = ProgramInfo.Name;
+            GetObjectPointer(ProgramInfo.CallPtr:rslvsp:ProgramInfo.LibPtr);
+            
+            //If it's a function, then get the function pointer
+            If (IsFunction);
+              lLength = %Len(ProgramInfo.Function);
+              lMark = ActivateServiceProgram(ProgramInfo.CallPtr);
+              RetrieveFunctionPointer(lMark
+                                     :0
+                                     :lLength
+                                     :ProgramInfo.Function
+                                     :ProgramInfo.CallPtr
+                                     :lExportRes);
+            Endif;
+            
+            //Now generate the parameters.
+            lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
+            dow JSON_ForEach(lList);
+              ProgramInfo.argc += 1;
+              ProgramInfo.argv(ProgramInfo.argc) = Generate_Data(lList.this);
+              
+              If (ProgramInfo.argv(ProgramInfo.argc) = *NULL);
+                MakeCall = *Off;
+                Leave;
+              Endif;
+            enddo;
+        
+          On-Error *All;
+            lResponse = Generate_Error('Error parsing request.');
+            MakeCall = *Off;
+          Endmon;
+
+          //**************************
           
+          If (MakeCall);
+            Monitor;
+              il_enterThreadSerialize();
+              
+              If (IsFunction);
+                lFuncRes = callfunc(ProgramInfo.CallPtr 
+                                   :ProgramInfo.argv 
+                                   :ProgramInfo.argc);
+              Else;
+                callpgmv(ProgramInfo.CallPtr 
+                        :ProgramInfo.argv 
+                        :ProgramInfo.argc);
+              Endif;
+              
+              il_exitThreadSerialize();
+              
+              lResponse = JSON_NewObject();
+              lArray = JSON_NewArray(json_LocateOrCreate(lResponse:'args'));
+              lIndex  = 0;
+              
+              //Get the parameters back out incase they have changed (by ref)
+              lList = JSON_SetIterator(lDocument:'args'); //Array: value, type
+              dow JSON_ForEach(lList);
+                lIndex += 1;
+                
+                lResParm = Get_Result(lList.this:ProgramInfo.argv(lIndex));
+                
+                If (JSON_GetLength(lResParm) = 1);
+                  JSON_ArrayPush(lArray:JSON_GetChild(lResParm));
+                Else;
+                  JSON_ArrayPush(lArray:lResParm);
+                Endif;
+                     
+              enddo;
+              
+              //If it's a function, get the result!
+              If (IsFunction);
+                lResParm = JSON_Locate(lDocument:'result');
+                lResParm = Get_Result(lResParm
+                                     :lFuncRes);
+                                     
+                If (JSON_GetLength(lResParm) = 1);
+                  JSON_SetPtr(lResponse:'result':JSON_GetChild(lResParm));
+                Else;
+                  JSON_SetPtr(lResponse:'result':lResParm);
+                Endif;
+              Endif;
+              
+            On-Error *All;
+              lResponse = Generate_Error('Error making call.');
+            Endmon;
+            
+          Else;
+            lResponse = Generate_Error('Error determining parameters.');
           Endif;
           
-          JSON_NodeDelete(lDocument);
+          //Also deallocate everything :)
+          For lIndex = 1 to ProgramInfo.argc;
+            Dealloc ProgramInfo.argv(lIndex);
+          Endfor;
           
-          Return lError;
+          Return lResponse;
         End-Proc;
         
         // -----------------------------------------------------------------------------
         
         Dcl-Proc Handle_DataQueue_Send;
-          dcl-pi *n Pointer; //Returns *NULL if successful
-            request  likeds(il_request);
-            response likeds(il_response);
+          dcl-pi *n Pointer;
+            lDocument Pointer;
           end-pi;
           
-          Dcl-S lError    Pointer Inz(*NULL);
-          Dcl-S lDocument Pointer;
           Dcl-S lResponse Pointer;
           
           Dcl-Ds DQInfo Qualified;
@@ -377,60 +356,48 @@
             KeyPtr   Pointer;
           End-Ds;
           
-          lDocument = JSON_ParseString(request.content.string);
+          DQInfo.Library = JSON_GetStr(lDocument:'library':'');
+          DQInfo.Object  = JSON_GetStr(lDocument:'object':'');
           
-          If (JSON_Error(lDocument));
-            lError = Generate_Error(JSON_Message(lDocument));
-              
-          Else;
-            DQInfo.Library = JSON_GetStr(lDocument:'library':'');
-            DQInfo.Object  = JSON_GetStr(lDocument:'object':'');
-            
-            DQInfo.DataLen  = %Len(JSON_GetStr(lDocument:'data':''));
-            DQInfo.DataChar = JSON_GetStr(lDocument:'data':'');
-            
-            DQInfo.KeyLen  = %Len(JSON_GetStr(lDocument:'key':''));
-            DQInfo.KeyPtr = JSON_GetValuePtr(JSON_Locate(lDocument:'key'));
-            
-            Monitor;
-              If (DQInfo.KeyLen = 0); //No key
-                DQSend(DQInfo.Object
-                      :DQInfo.Library
-                      :DQInfo.DataLen
-                      :DQInfo.DataChar);
-              Else;
-                DQSend(DQInfo.Object
-                      :DQInfo.Library
-                      :DQInfo.DataLen
-                      :DQInfo.DataChar
-                      :DQInfo.KeyLen
-                      :DQInfo.KeyPtr);
-              Endif;
-              
-              //json_GetValuePtr
-              lResponse = JSON_NewObject();
-              JSON_SetBool(lResponse:'success':*On);
-              
-              il_responseWrite(response:JSON_AsJsonText(lResponse));
-            On-Error *All;
-              lError = Generate_Error('Error sending to data queue.');
-            Endmon;
-            
-          Endif;
+          DQInfo.DataLen  = %Len(JSON_GetStr(lDocument:'data':''));
+          DQInfo.DataChar = JSON_GetStr(lDocument:'data':'');
           
-          Return lError;
+          DQInfo.KeyLen  = %Len(JSON_GetStr(lDocument:'key':''));
+          DQInfo.KeyPtr = JSON_GetValuePtr(JSON_Locate(lDocument:'key'));
+          
+          Monitor;
+            If (DQInfo.KeyLen = 0); //No key
+              DQSend(DQInfo.Object
+                    :DQInfo.Library
+                    :DQInfo.DataLen
+                    :DQInfo.DataChar);
+            Else;
+              DQSend(DQInfo.Object
+                    :DQInfo.Library
+                    :DQInfo.DataLen
+                    :DQInfo.DataChar
+                    :DQInfo.KeyLen
+                    :DQInfo.KeyPtr);
+            Endif;
+            
+            //json_GetValuePtr
+            lResponse = JSON_NewObject();
+            JSON_SetBool(lResponse:'success':*On);
+            
+          On-Error *All;
+            lResponse = Generate_Error('Error sending to data queue.');
+          Endmon;
+          
+          Return lResponse;
         End-Proc;
         
         // -----------------------------------------------------------------------------
         
         Dcl-Proc Handle_DataQueue_Pop;
-          dcl-pi *n Pointer; //Returns *NULL if successful
-            request  likeds(il_request);
-            response likeds(il_response);
+          dcl-pi *n Pointer;
+            lDocument Pointer;
           end-pi;
           
-          Dcl-S lError    Pointer Inz(*NULL);
-          Dcl-S lDocument Pointer;
           Dcl-S lResponse Pointer;
           
           Dcl-Ds DQInfo Qualified;
@@ -444,52 +411,43 @@
             KeyPtr   Pointer;
           End-Ds;
           
-          lDocument = JSON_ParseString(request.content.string);
+          DQInfo.Library  = JSON_GetStr(lDocument:'library':'');
+          DQInfo.Object   = JSON_GetStr(lDocument:'object':'');
+          DQInfo.Waittime = JSON_GetNum(lDocument:'waittime':0);
+          DQInfo.KeyOrder = JSON_GetStr(lDocument:'keyorder':'EQ');
+          DQInfo.KeyLen   = %Len(JSON_GetStr(lDocument:'key':''));
+          DQInfo.KeyPtr   = JSON_GetValuePtr(lDocument:'key');
           
-          If (JSON_Error(lDocument));
-            lError = Generate_Error(JSON_Message(lDocument));
-              
-          Else;
-            DQInfo.Library  = JSON_GetStr(lDocument:'library':'');
-            DQInfo.Object   = JSON_GetStr(lDocument:'object':'');
-            DQInfo.Waittime = JSON_GetNum(lDocument:'waittime':0);
-            DQInfo.KeyOrder = JSON_GetStr(lDocument:'keyorder':'EQ');
-            DQInfo.KeyLen   = %Len(JSON_GetStr(lDocument:'key':''));
-            DQInfo.KeyPtr   = JSON_GetValuePtr(lDocument:'key');
+          Monitor;
+            If (DQInfo.KeyLen = 0); //No key
+              DQPop(DQInfo.Object
+                    :DQInfo.Library
+                    :DQInfo.DataLen
+                    :DQInfo.DataChar
+                    :DQInfo.Waittime);
+            Else;
+              DQPop(DQInfo.Object
+                    :DQInfo.Library
+                    :DQInfo.DataLen
+                    :DQInfo.DataChar
+                    :DQInfo.Waittime
+                    :DQInfo.KeyOrder
+                    :DQInfo.KeyLen
+                    :DQInfo.KeyPtr);
+            Endif;
             
-            Monitor;
-              If (DQInfo.KeyLen = 0); //No key
-                DQPop(DQInfo.Object
-                      :DQInfo.Library
-                      :DQInfo.DataLen
-                      :DQInfo.DataChar
-                      :DQInfo.Waittime);
-              Else;
-                DQPop(DQInfo.Object
-                      :DQInfo.Library
-                      :DQInfo.DataLen
-                      :DQInfo.DataChar
-                      :DQInfo.Waittime
-                      :DQInfo.KeyOrder
-                      :DQInfo.KeyLen
-                      :DQInfo.KeyPtr);
-              Endif;
-              
-              //json_GetValuePtr
-              lResponse = JSON_NewObject();
-              JSON_SetBool(lResponse:'success':*On);
-              JSON_SetNum(lResponse:'length':DQInfo.DataLen);
-              JSON_SetStr(lResponse:'value':%Subst(DQInfo.DataChar
-                                                  :1:DQInfo.DataLen));
-              
-              il_responseWrite(response:JSON_AsJsonText(lResponse));
-            On-Error *All;
-              lError = Generate_Error('Error sending to data queue.');
-            Endmon;
+            //json_GetValuePtr
+            lResponse = JSON_NewObject();
+            JSON_SetBool(lResponse:'success':*On);
+            JSON_SetNum(lResponse:'length':DQInfo.DataLen);
+            JSON_SetStr(lResponse:'value':%Subst(DQInfo.DataChar
+                                                :1:DQInfo.DataLen));
             
-          Endif;
+          On-Error *All;
+            lResponse = Generate_Error('Error sending to data queue.');
+          Endmon;
           
-          Return lError;
+          Return lResponse;
         End-Proc;
         
         // -----------------------------------------------------------------------------
