@@ -112,22 +112,14 @@
             
           Else;
           
-	          If (lMethod = 'POST');
-	            Select;
-	              When (lEndpoint = '/sql');
-	                lResponse = Handle_SQL(lDocument);
-	              When (lEndpoint = '/call');
-	                lResponse = Handle_Call(lDocument);
-	              When (lEndpoint = '/dq/send');
-	                lResponse = Handle_DataQueue_Send(lDocument);
-	              When (lEndpoint = '/dq/pop');
-	                lResponse = Handle_DataQueue_Pop(lDocument);
-	            Endsl;
-	            
-	          Else;
-	            lResponse = Generate_Error('Requires POST request.');
-	          Endif;
-	          
+            If (lMethod = 'POST');
+              lResponse = Handle_Action(il_getRequestResource(request)
+                                       :lDocument);
+              
+            Else;
+              lResponse = Generate_Error('Requires POST request.');
+            Endif;
+            
           Endif;
           
           If (lResponse <> *NULL);
@@ -138,6 +130,47 @@
           JSON_NodeDelete(lDocument);
           
         end-proc;
+        
+        // -----------------------------------------------------------------------------
+        
+        Dcl-Proc Handle_Action;
+          Dcl-Pi *N Pointer;
+            pEndpoint Char(128) Const;
+            pDocument Pointer;
+          End-Pi;
+          
+          Dcl-S  lResponse Pointer;
+          
+          Dcl-s  lResArray Pointer;
+          Dcl-S  lEndpoint Char(128);
+          Dcl-DS lList     likeds(JSON_ITERATOR);
+          
+          Select;
+            When (pEndpoint = '/any');
+              lList = JSON_SetIterator(pDocument); //Array body is expected.
+              lResArray = JSON_NewArray();
+              dow JSON_ForEach(lList);
+                lEndpoint = json_GetStr(lList.this:'action');
+                lResponse = Handle_Action(lEndpoint:lList.this);
+                json_ArrayPush(lResArray:lResponse:JSON_COPY_CLONE);
+              enddo;
+              lResponse = lResArray;
+              
+            When (pEndpoint = '/sql');
+              lResponse = Handle_SQL(pDocument);
+            When (pEndpoint = '/call');
+              lResponse = Handle_Call(pDocument);
+            When (pEndpoint = '/dq/send');
+              lResponse = Handle_DataQueue_Send(pDocument);
+            When (pEndpoint = '/dq/pop');
+              lResponse = Handle_DataQueue_Pop(pDocument);
+            Other;
+              lResponse = Generate_Error('Incorrect action: '
+                         + %TrimR(pEndpoint));
+          Endsl;
+          
+          Return lResponse;
+        End-Proc;
         
         // -----------------------------------------------------------------------------
 
