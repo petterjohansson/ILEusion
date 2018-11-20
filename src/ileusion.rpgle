@@ -66,6 +66,11 @@
           Key      Pointer   Options(*NoPass);
         End-Pr;
         
+        Dcl-Pr QCMDEXC ExtPgm('QCMDEXC');
+          Command Char(1024)    Options(*Varsize)  Const;
+          Length  Packed(15:5)  Const;
+        End-Pr;
+        
         // -----------------------------------------------------------------------------
         // Main
         // -----------------------------------------------------------------------------
@@ -164,6 +169,8 @@
               lResponse = Handle_DataQueue_Send(pDocument);
             When (pEndpoint = '/dq/pop');
               lResponse = Handle_DataQueue_Pop(pDocument);
+            When (pEndpoint = '/cl');
+              lResponse = Handle_Command(pDocument);
             Other;
               lResponse = Generate_Error('Incorrect action: '
                          + %TrimR(pEndpoint));
@@ -478,6 +485,34 @@
             
           On-Error *All;
             lResponse = Generate_Error('Error sending to data queue.');
+          Endmon;
+          
+          Return lResponse;
+        End-Proc;
+        
+        // -----------------------------------------------------------------------------
+        
+        Dcl-Proc Handle_Command;
+          dcl-pi *n Pointer;
+            lDocument Pointer;
+          end-pi;
+          
+          Dcl-S lResponse Pointer;
+          
+          Dcl-S lCommand Char(1024);
+          Dcl-S lLength  Packed(15:5);
+          
+          lCommand = JSON_GetStr(lDocument:'command':'');
+          lLength  = %Len(lCommand);
+          
+          Monitor;
+            il_enterThreadSerialize();
+            QCMDEXC(lCommand:lLength);
+            il_exitThreadSerialize();
+            lResponse = JSON_NewObject();
+            JSON_SetBool(lResponse:'success':*On);
+          On-Error *All;
+            lResponse = Generate_Error('Error during execution of command.');
           Endmon;
           
           Return lResponse;
