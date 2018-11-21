@@ -331,7 +331,7 @@
               il_exitThreadSerialize();
               
               lResponse = JSON_NewObject();
-              lArray = JSON_NewArray(json_LocateOrCreate(lResponse:'args'));
+              lArray = JSON_NewArray();
               lIndex  = 0;
               
               //Get the parameters back out incase they have changed (by ref)
@@ -346,8 +346,10 @@
                 Else;
                   JSON_ArrayPush(lArray:lResParm);
                 Endif;
-                     
+
               enddo;
+              
+              JSON_moveObjectInto(lResponse:'args':lArray);
               
               //If it's a function, get the result!
               If (IsFunction);
