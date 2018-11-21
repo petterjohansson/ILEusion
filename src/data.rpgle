@@ -11,6 +11,7 @@
           ByteSize    Int(5); //Size of type for each element
           Type        Char(10);
           Length      Int(5); //Variable length for each element
+          Scale       Int(3);
         End-Ds;
         
         Dcl-Ds Types Qualified Template;
@@ -25,6 +26,14 @@
           float  Float(4) Pos(1);
           double Float(8) Pos(1);
         End-Ds;
+        
+        Dcl-Pr str_2_packed Int(10) ExtProc(*CWIDEN:'str_2_packed');
+          Output Pointer Value;
+          Input  Pointer Value;
+          Dim    Int(10) Value;
+          Length Int(10) Value;
+          Scale  Int(10) Value;
+        End-Pr;
         
         // -------------------------
         
@@ -44,6 +53,7 @@
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
           CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
+          CurrentArg.Scale       = JSON_GetNum(pCurrentArg:'precision':0);
           CurrentArg.ByteSize    = JSON_GetNum(pCurrentArg:'bytesize':0);
           CurrentArg.ArraySize   = JSON_GetNum(pCurrentArg:'arraysize':1);
           
@@ -141,6 +151,7 @@
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
           CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
+          CurrentArg.Scale       = JSON_GetNum(pCurrentArg:'precision':0);
           CurrentArg.ByteSize    = GetByteSize(CurrentArg);
           
           If (CurrentArg.ByteSize > 0);
@@ -209,6 +220,9 @@
                 When (pCurrentArg.Length = 8);
                   ByteSize = %Size(Types.double);
               Endsl;
+              
+            When (pCurrentArg.Type = 'packed');
+              ByteSize = pCurrentArg.Length/2+1;
           Endsl;
           
           Return ByteSize;
@@ -223,9 +237,10 @@
             pArg    LikeDS(CurrentArg_T);
           End-Pi;
 
-          Dcl-Ds ValuePtr LikeDS(Types);
-          Dcl-S  lIndex   Int(5);
-          Dcl-DS lList    likeds(JSON_ITERATOR);
+          Dcl-S  ValueChar Char(16);
+          Dcl-Ds ValuePtr  LikeDS(Types);
+          Dcl-S  lIndex    Int(5);
+          Dcl-DS lList     likeds(JSON_ITERATOR);
 
           lIndex = 0;
           lList = JSON_SetIterator(pArray); //Array: value
@@ -278,6 +293,11 @@
                     ValuePtr.double = %Float(JSON_GetStr(lList.this));
                 Endsl;
                 memcpy(pResult+lIndex:%Addr(ValuePtr):pArg.ByteSize);
+                
+              When (pArg.Type = 'packed');
+                ValueChar = JSON_GetStr(lList.this);
+                str_2_packed(pResult+lIndex:%Addr(ValueChar):1
+                            :pArg.Length:pArg.Scale);
             Endsl;
 
             lIndex += pArg.ByteSize;

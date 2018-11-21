@@ -11,14 +11,15 @@ all: lib modules program cmds
 lib:
 	-system -q "CRTLIB $(BIN_LIB) TYPE(*PROD) TEXT('ILEusion')"
 
-modules: ileusion.rpgle data.rpgle callfunc.rpgle
+modules: ileusion.rpgle data.rpgle callfunc.rpgle packed.c
+	@echo "Modules built!"
 
 program:
 	qsh <<EOF
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC) BNDDIR(JSONXML ILEASTIC)"
+	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/PACKED) BNDDIR(JSONXML ILEASTIC)"
 	EOF
 	
 cmds:
@@ -35,6 +36,9 @@ cmds:
 
 %.rpgle:
 	system -q "CRTRPGMOD MODULE($(BIN_LIB)/$*) SRCSTMF('./src/$*.rpgle') DBGVIEW($(DBGVIEW)) REPLACE(*YES)" | grep '*RNF' | grep -v '*RNF7031' | sed  "s!*!$@: &!"
+	
+%.c:
+	system "CRTCMOD MODULE($(BIN_LIB)/$*) SRCSTMF('./src/$*.c') DBGVIEW($(DBGVIEW)) REPLACE(*YES)"
 	
 all:
 	@echo "Build finished!"

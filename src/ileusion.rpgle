@@ -367,9 +367,6 @@
             On-Error *All;
               lResponse = Generate_Error('Error making call.');
             Endmon;
-            
-          Else;
-            lResponse = Generate_Error('Error determining parameters.');
           Endif;
           
           //Also deallocate everything :)
