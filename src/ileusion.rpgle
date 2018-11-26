@@ -151,7 +151,7 @@
           Dcl-DS lList     likeds(JSON_ITERATOR);
           
           Select;
-            When (pEndpoint = '/any');
+            When (pEndpoint = '/transaction');
               lList = JSON_SetIterator(pDocument); //Array body is expected.
               lResArray = JSON_NewArray();
               dow JSON_ForEach(lList);
@@ -196,7 +196,7 @@
               
           Else;
           
-            lSQLStmt = JSON_Locate(lDocument:'/query');
+            lSQLStmt = JSON_Locate(lDocument:'query');
             If (lSQLStmt <> *NULL);
             
               lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt));
