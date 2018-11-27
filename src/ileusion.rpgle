@@ -44,6 +44,10 @@
           argc    Uns(10) Value;
         End-Pr;
         
+        Dcl-Pr QSHCommand Int(10) ExtProc('QzshSystem');
+          *N Pointer Value Options(*String);
+        End-Pr;
+        
         Dcl-C DQ_LEN 16384;
         
         Dcl-Pr DQSend ExtPgm('QSNDDTAQ');
@@ -170,7 +174,9 @@
             When (pEndpoint = '/dq/pop');
               lResponse = Handle_DataQueue_Pop(pDocument);
             When (pEndpoint = '/cl');
-              lResponse = Handle_Command(pDocument);
+              lResponse = Handle_CL_Command(pDocument);
+            When (pEndpoint = '/qsh');
+              lResponse = Handle_QSH_Command(pDocument);
             Other;
               lResponse = Generate_Error('Incorrect action: '
                          + %TrimR(pEndpoint));
@@ -491,7 +497,7 @@
         
         // -----------------------------------------------------------------------------
         
-        Dcl-Proc Handle_Command;
+        Dcl-Proc Handle_CL_Command;
           dcl-pi *n Pointer;
             lDocument Pointer;
           end-pi;
@@ -515,6 +521,32 @@
           Endmon;
           
           Return lResponse;
+        End-Proc;
+        
+        // -----------------------------------------------------------------------------
+        
+        Dcl-Proc Handle_QSH_Command;
+          dcl-pi *n Pointer;
+            lDocument Pointer;
+          end-pi;
+          
+          Dcl-S lResponse Pointer;
+          Dcl-S lReturned Int(10);
+          
+          Monitor;
+            il_enterThreadSerialize();
+            lReturned = QSHCommand(JSON_GetStr(lDocument:'command':''));
+            il_exitThreadSerialize();
+            lResponse = JSON_NewObject();
+            
+            JSON_SetNum(lResponse:'returned':lReturned);
+            JSON_SetBool(lResponse:'success':*On);
+          On-Error *All;
+            lResponse = Generate_Error('Error during execution of command.');
+          Endmon;
+          
+          Return lResponse;
+          
         End-Proc;
         
         // -----------------------------------------------------------------------------
