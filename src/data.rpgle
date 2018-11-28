@@ -35,6 +35,13 @@
           Scale  Int(10) Value;
         End-Pr;
         
+        Dcl-Pr packed_2_str Int(10) ExtProc(*CWIDEN:'packed_2_str');
+          Output Pointer Value;
+          Input  Pointer Value;
+          Length Int(10) Value;
+          Scale  Int(10) Value;
+        End-Pr;
+        
         // -------------------------
         
         Dcl-Proc Get_Result Export;
@@ -50,6 +57,8 @@
           Dcl-S  lResult    Varchar(MAX_STRING);
           Dcl-DS ValuePtr   LikeDS(Types);
           Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
+          
+          Dcl-s  lPackedRes Char(32);
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
           CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
@@ -115,6 +124,11 @@
                     When (CurrentArg.Length = 8);
                       lResult = %Char(ValuePtr.double);
                   Endsl;
+                  
+                When (CurrentArg.Type = 'packed');
+                  packed_2_str(%Addr(lPackedRes):pValue+lIndex
+                              :CurrentArg.Length:CurrentArg.Scale);
+                  lResult = %TrimR(lPackedRes);
               Endsl;
               
               JSON_ArrayPush(lArray:lResult);
