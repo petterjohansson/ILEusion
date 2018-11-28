@@ -196,30 +196,37 @@
           
           Dcl-S lResultSet Pointer;
           Dcl-S lSQLStmt   Pointer;
+          Dcl-S lMode      Int(3);
           
-          If (JSON_Error(lDocument));
-            lResult = Generate_Error('Error parsing JSON.');
-              
+          lMode    = JSON_GetNum(lDocument:'mode':1);
+          lSQLStmt = JSON_Locate(lDocument:'query');
+          
+          If (lSQLStmt <> *NULL);
+          	
+          	Select;
+          	  When (lMode = 1);
+          	  	lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt));
+		            
+		            If (JSON_Error(lResultSet));
+		              lResult = Generate_Error(JSON_Message(lResultSet));
+		              
+		            Else;
+		              lResult = lResultSet;
+		            Endif;
+		            
+          	  When (lMode = 2);
+          	  	If (json_sqlExec(json_GetValuePtr(lSQLStmt)));
+          	  		lResult = Generate_Error(JSON_Message(lResultSet));
+          	  	Else;
+          	  		lResult = JSON_NewObject();
+          				JSON_SetBool(lResult:'success':*On);
+          	  	Endif;
+          	Endsl;
+            
+            JSON_sqlDisconnect();
+            
           Else;
-          
-            lSQLStmt = JSON_Locate(lDocument:'query');
-            If (lSQLStmt <> *NULL);
-            
-              lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt));
-              
-              If (JSON_Error(lResultSet));
-                lResult = Generate_Error(JSON_Message(lResultSet));
-                
-              Else;
-                lResult = lResultSet;
-              Endif;
-              
-              JSON_sqlDisconnect();
-              
-            Else;
-              lResult = Generate_Error('Missing SQL statement.');
-            Endif;
-            
+            lResult = Generate_Error('Missing SQL statement.');
           Endif;
           
           return lResult;
