@@ -42,6 +42,21 @@
           Scale  Int(10) Value;
         End-Pr;
         
+        Dcl-Pr str_2_zoned Int(10) ExtProc(*CWIDEN:'str_2_zoned');
+          Output Pointer Value;
+          Input  Pointer Value;
+          Dim    Int(10) Value;
+          Length Int(10) Value;
+          Scale  Int(10) Value;
+        End-Pr;
+        
+        Dcl-Pr zoned_2_str Int(10) ExtProc(*CWIDEN:'zoned_2_str');
+          Output Pointer Value;
+          Input  Pointer Value;
+          Length Int(10) Value;
+          Scale  Int(10) Value;
+        End-Pr;
+        
         // -------------------------
         
         Dcl-Proc Get_Result Export;
@@ -58,7 +73,7 @@
           Dcl-DS ValuePtr   LikeDS(Types);
           Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
           
-          Dcl-s  lPackedRes Char(32);
+          Dcl-s  lDecimalRes Char(32);
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
           CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
@@ -126,9 +141,14 @@
                   Endsl;
                   
                 When (CurrentArg.Type = 'packed');
-                  packed_2_str(%Addr(lPackedRes):pValue+lIndex
+                  packed_2_str(%Addr(lDecimalRes):pValue+lIndex
                               :CurrentArg.Length:CurrentArg.Scale);
-                  lResult = %TrimR(lPackedRes);
+                  lResult = %TrimR(lDecimalRes);
+                  
+                When (CurrentArg.Type = 'zoned');
+                  zoned_2_str(%Addr(lDecimalRes):pValue+lIndex
+                              :CurrentArg.Length:CurrentArg.Scale);
+                  lResult = %TrimR(lDecimalRes);
               Endsl;
               
               JSON_ArrayPush(lArray:lResult);
@@ -237,6 +257,9 @@
               
             When (pCurrentArg.Type = 'packed');
               ByteSize = pCurrentArg.Length/2+1;
+              
+            When (pCurrentArg.Type = 'zoned');
+              ByteSize = pCurrentArg.Length;
           Endsl;
           
           Return ByteSize;
@@ -311,6 +334,11 @@
               When (pArg.Type = 'packed');
                 ValueChar = JSON_GetStr(lList.this);
                 str_2_packed(pResult+lIndex:%Addr(ValueChar):1
+                            :pArg.Length:pArg.Scale);
+                            
+              When (pArg.Type = 'zoned');
+                ValueChar = JSON_GetStr(lList.this);
+                str_2_zoned(pResult+lIndex:%Addr(ValueChar):1
                             :pArg.Length:pArg.Scale);
             Endsl;
 

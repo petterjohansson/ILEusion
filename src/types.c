@@ -1,6 +1,46 @@
 
 #define hex_nbr 0xF0
 
+int str_2_zoned(char * where, char *str, int tdim, int tlen, int tscale) {
+  int i = 0;
+  int j = 0;
+  int k = 0;
+  int outDigits = tlen;
+  int outDecimalPlaces = tscale;
+  int outLength = outDigits;
+  int inLength = 0;
+  int sign = 0;
+  char chr[256];
+  char dec[256];
+  char * c;
+  char * wherev = where;
+
+  /* fix up input */
+  c = chr;
+  inLength = ile_pgm_str_fix_decimal(str, tlen, tscale, c, sizeof(chr), &sign);
+
+  /* convert string to zoned */
+  /* write correct number of leading zero's */
+  for (i=0; i < outDigits-inLength; i++) {
+    dec[j++] = (char)0xF0;
+  }
+  /* place all the digits except the last one */
+  while (j < outLength-1) {
+    dec[j++] = (char)((c[k++] & 0x000F) | 0x00F0);
+  }
+  /* place the sign and last digit */
+  if (!sign) {
+    dec[j++] = (char)((c[k++] & 0x000F) | 0x00F0);
+  } else {
+    dec[j++] = (char)((c[k++] & 0x000F) | 0x00D0);
+  }
+  /* copy in */
+  for (i=0; i < tdim; i++, wherev += outLength) {
+    memcpy(wherev, dec, outLength);
+  }
+  return 0;
+}
+
 int str_2_packed(char * where, char *str, int tdim, int tlen, int tscale) {
   int i = 0;
   int j = 0;
@@ -223,6 +263,70 @@ int ile_pgm_str_fix_round(char *str, int tlen, int tscale) {
     }
   }
   return overflow;
+}
+
+int zoned_2_str(char * res, char * where, int tlen, int tscale) {
+  int i = 0;
+  int j = 0;
+  int k = 0;
+  int l = 0;
+  int isOk = 0;
+  int isDot = 0;
+  int isScale = 0;
+  char * wherev = (char *) where;
+  int outDigits = tlen;
+  int outLength = outDigits;
+  int leftDigitValue = 0;
+  int rightDigitValue = 0;
+  char * c;
+  char str[128];
+  for (i=0, j = 0; i < 1; i++, wherev += outLength) {
+    memset(str,0,sizeof(str));
+    /* sign negative */
+    c = wherev;
+    leftDigitValue = (char)((c[outLength-1] >> 4) & 0x0F);
+    if (leftDigitValue == 0x0D) {
+      str[j++] = '-';
+    }
+    for (k=0, l=0, isOk=0, isDot=0, isScale=0; k < outLength; k++) {
+      /* digits */
+      leftDigitValue = (char)((c[k] >> 4) & 0x0F);
+      /* decimal point */
+      if (!isDot && tscale && l >= tlen - tscale) {
+        if (!isOk) {
+          str[j++] = (char) hex_nbr;
+        }
+        str[j++] = '.';
+        isDot = 1;
+        isOk = 1;
+      }
+      l++;
+      /* digits */
+      rightDigitValue = (char)(c[k] & 0x0F);
+      if (isOk || rightDigitValue > 0) {
+        str[j++] = (char)(hex_nbr + rightDigitValue);
+        isOk = 1;
+        if (isDot) {
+          isScale++;
+        }
+      }
+    }
+    /* zero */
+    if (!isOk) {
+      str[j++] = (char) hex_nbr;
+      str[j++] = '.';
+      isOk = 1;
+      isDot = 1;
+      isScale = 0;
+    }
+    /* one significant decimal */
+    if (isDot && !isScale) {
+      str[j++] = (char) hex_nbr;
+    }
+    memcpy(res, str, outLength);
+    j = 0; /* Brian s with dim */
+  }
+  return 0;
 }
 
 int packed_2_str(char * res, char * where, int tlen, int tscale) {
