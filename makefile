@@ -29,7 +29,7 @@ ileusion_s.srvpgm: ileusion_s.rpgle actions.rpgle data.rpgle callfunc.rpgle type
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTSRVPGM SRVPGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) EXPORT(*ALL)"
+	system -i "CRTSRVPGM SRVPGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) EXPORT(*ALL) ACTGRP(*CALLER)"
 	EOF
 
 cmds:
