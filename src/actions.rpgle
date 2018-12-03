@@ -84,7 +84,7 @@
           Dcl-DS lList     likeds(JSON_ITERATOR);
           
           Select;
-            When (pEndpoint = '/transaction');
+            When (pEndpoint = '/transaction' OR pEndpoint = '');
               lList = JSON_SetIterator(pDocument); //Array body is expected.
               lResArray = JSON_NewArray();
               dow JSON_ForEach(lList);

@@ -1,27 +1,37 @@
 
 BIN_LIB=ILEUSION
 DBGVIEW=*ALL
+MODS=$(BIN_LIB)/ACTIONS $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/TYPES
 
 # ---------------
 
 .ONESHELL:
 
-all: lib modules program cmds
+all: $(BIN_LIB).lib ileusion.pgm cmds ileusion_s.srvpgm
 
-lib:
-	-system -q "CRTLIB $(BIN_LIB) TYPE(*PROD) TEXT('ILEusion')"
+%.lib:
+	-system -q "CRTLIB $* TYPE(*PROD) TEXT('ILEusion')"
 
-modules: ileusion.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c
-	@echo "Modules built!"
+ileusion.pgm: ileusion.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c
 
-program:
+ileusion_s.srvpgm: ileusion_s.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c
+
+%.pgm:
 	qsh <<EOF
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/ACTIONS $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/TYPES) BNDDIR(JSONXML ILEASTIC)"
+	system -i "CRTPGM PGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) BNDDIR(JSONXML ILEASTIC)"
 	EOF
-	
+
+%.srvpgm:
+	qsh <<EOF
+	liblist -a NOXDB
+	liblist -a ILEASTIC
+	liblist -a $(BIN_LIB)
+	system -i "CRTSRVPGM SRVPGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) EXPORT(*ALL)"
+	EOF
+
 cmds:
 	qsh <<EOF
 	liblist -a $(BIN_LIB)
