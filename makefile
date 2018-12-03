@@ -11,7 +11,7 @@ all: lib modules program cmds
 lib:
 	-system -q "CRTLIB $(BIN_LIB) TYPE(*PROD) TEXT('ILEusion')"
 
-modules: ileusion.rpgle data.rpgle callfunc.rpgle packed.c
+modules: ileusion.rpgle actions.rpgle data.rpgle callfunc.rpgle packed.c
 	@echo "Modules built!"
 
 program:
@@ -19,7 +19,7 @@ program:
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/PACKED) BNDDIR(JSONXML ILEASTIC)"
+	system -i "CRTPGM PGM($(BIN_LIB)/ILEUSION) MODULE($(BIN_LIB)/ILEUSION $(BIN_LIB)/ACTIONS $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/PACKED) BNDDIR(JSONXML ILEASTIC)"
 	EOF
 	
 cmds:
