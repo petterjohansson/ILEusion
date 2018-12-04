@@ -178,6 +178,7 @@
             Function Varchar(32);
             argv     Pointer Dim(256) Inz(*NULL);
             argc     Uns(3);
+            Threaded Ind Inz(*Off); //As in is multithread capable
             
             LibPtr  Pointer;
             CallPtr Pointer; //Pointer to object or function
@@ -203,9 +204,10 @@
           Monitor;
             MakeCall = *On;
             
-            ProgramInfo.Library = JSON_GetStr(lDocument:'library');
-            ProgramInfo.Name    = JSON_GetStr(lDocument:'object');
-            ProgramInfo.argc    = 0;
+            ProgramInfo.Library  = JSON_GetStr(lDocument:'library');
+            ProgramInfo.Name     = JSON_GetStr(lDocument:'object');
+            ProgramInfo.argc     = 0;
+            ProgramInfo.Threaded = JSON_IsTrue(lDocument:'multithread'); //Default *off
             
             If (JSON_Locate(lDocument:'function') <> *NULL);
               ProgramInfo.Function = JSON_GetStr(lDocument:'function');
@@ -258,7 +260,9 @@
           
           If (MakeCall);
             Monitor;
-              il_enterThreadSerialize();
+              If (NOT ProgramInfo.Threaded);
+              	il_enterThreadSerialize();
+              Endif;
               
               If (IsFunction);
                 lFuncRes = callfunc(ProgramInfo.CallPtr 
@@ -270,7 +274,9 @@
                         :ProgramInfo.argc);
               Endif;
               
-              il_exitThreadSerialize();
+              If (NOT ProgramInfo.Threaded);
+                il_exitThreadSerialize();
+              Endif;
               
               lResponse = JSON_NewObject();
               lArray = JSON_NewArray();
