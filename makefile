@@ -7,21 +7,23 @@ MODS=$(BIN_LIB)/ACTIONS $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/TYPES
 
 .ONESHELL:
 
-all: $(BIN_LIB).lib ileusion.pgm cmds ileusion_s.srvpgm
+all: clean $(BIN_LIB).lib ileusion.pgm cmds ileusion_s.srvpgm
 
 %.lib:
 	-system -q "CRTLIB $* TYPE(*PROD) TEXT('ILEusion')"
 
-ileusion.pgm: ileusion.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c
+ileusion.pgm: ileusion.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c ileusion.bnddir
 
-ileusion_s.srvpgm: ileusion_s.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c
+ileusion_s.srvpgm: ileusion_s.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c ileusion.bnddir
+
+ileusion.bnddir: noxdb.entry ileastic.entry
 
 %.pgm:
 	qsh <<EOF
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTPGM PGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) BNDDIR(JSONXML ILEASTIC)"
+	system -i "CRTPGM PGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) BNDDIR($(BIN_LIB)/ILEUSION)"
 	EOF
 
 %.srvpgm:
@@ -29,7 +31,7 @@ ileusion_s.srvpgm: ileusion_s.rpgle actions.rpgle data.rpgle callfunc.rpgle type
 	liblist -a NOXDB
 	liblist -a ILEASTIC
 	liblist -a $(BIN_LIB)
-	system -i "CRTSRVPGM SRVPGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) EXPORT(*ALL) ACTGRP(*CALLER)"
+	system -i "CRTSRVPGM SRVPGM($(BIN_LIB)/$*) MODULE($(BIN_LIB)/$* $(MODS)) EXPORT(*ALL) ACTGRP(*CALLER) BNDDIR($(BIN_LIB)/ILEUSION)"
 	EOF
 
 cmds:
@@ -49,6 +51,18 @@ cmds:
 	
 %.c:
 	system "CRTCMOD MODULE($(BIN_LIB)/$*) SRCSTMF('./src/$*.c') DBGVIEW($(DBGVIEW)) REPLACE(*YES)"
-	
+
+%.bnddir:
+	-system -qi "CRTBNDDIR BNDDIR($(BIN_LIB)/$*)"
+	-system -qi "ADDBNDDIRE BNDDIR($(BIN_LIB)/$*) OBJ($(patsubst %.entry,(*LIBL/% *SRVPGM *IMMED),$^))"
+
+%.entry:
+	# Basically do nothing..
+	@echo "Adding binding entry $*"
+
+clean:
+	-system -qi "DLTOBJ OBJ($(BIN_LIB)/*ALL) OBJTYPE(*FILE)"
+	-system -qi "DLTOBJ OBJ($(BIN_LIB)/*ALL) OBJTYPE(*MODULE)"
+
 all:
 	@echo "Build finished!"
