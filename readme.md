@@ -2,4 +2,4 @@
 
 Web server for ILEusion.
 
-[Read more here](https://sitemule.github.io/ileusion/about).
+[Read more here on the documentation site](https://sitemule.github.io/ileusion/about).
