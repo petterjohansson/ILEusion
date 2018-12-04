@@ -76,9 +76,9 @@ release: clean
 	-mkdir release
 	system "CPY OBJ('/QSYS.lib/$(BIN_LIB).lib/RELEASE.FILE') TODIR('./release/')"
 	@echo " -- Cleaning up... --"
-	system "DLTOBJ OBJ(ILEUSION/RELEASE) OBJTYPE(*FILE)"
-	system "DLTOBJ OBJ(ILEUSION/ILEASTIC) OBJTYPE(*SRVPGM)"
-	system "DLTOBJ OBJ(ILEUSION/JSONXML) OBJTYPE(*SRVPGM)"
+	system "DLTOBJ OBJ($(BIN_LIB)/RELEASE) OBJTYPE(*FILE)"
+	system "DLTOBJ OBJ($(BIN_LIB)/ILEASTIC) OBJTYPE(*SRVPGM)"
+	system "DLTOBJ OBJ($(BIN_LIB)/JSONXML) OBJTYPE(*SRVPGM)"
 	@echo " -- Release created! --"
 	@echo ""
 	@echo "To install the release, run:"
