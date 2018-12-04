@@ -65,22 +65,27 @@ clean:
 	-system -qi "DLTOBJ OBJ($(BIN_LIB)/*ALL) OBJTYPE(*MODULE)"
 	
 release: clean
-	@echo "Creating ILEusion release."
-	@echo "Copying service programs deps."
+	@echo " -- Creating ILEusion release. --"
+	@echo " -- Copying service programs deps. --"
 	system "CRTDUPOBJ OBJ(ILEASTIC) FROMLIB(ILEASTIC) OBJTYPE(*SRVPGM) TOLIB($(BIN_LIB))"
-	system "CRTDUPOBJ OBJ(NOXDB) FROMLIB(NOXDB) OBJTYPE(*SRVPGM) TOLIB($(BIN_LIB))"
-	@echo "Creating save file."
+	system "CRTDUPOBJ OBJ(JSONXML) FROMLIB(NOXDB) OBJTYPE(*SRVPGM) TOLIB($(BIN_LIB))"
+	@echo " -- Creating save file. --"
 	system "CRTSAVF FILE($(BIN_LIB)/RELEASE)"
 	system "SAVLIB LIB($(BIN_LIB)) DEV(*SAVF) SAVF($(BIN_LIB)/RELEASE) OMITOBJ((RELEASE *FILE))"
 	-rm -r release
 	-mkdir release
 	system "CPY OBJ('/QSYS.lib/$(BIN_LIB).lib/RELEASE.FILE') TODIR('./release/')"
+	@echo " -- Cleaning up... --"
 	system "DLTOBJ OBJ(ILEUSION/RELEASE) OBJTYPE(*FILE)"
-	@echo "Release created!"
+	system "DLTOBJ OBJ(ILEUSION/ILEASTIC) OBJTYPE(*SRVPGM)"
+	system "DLTOBJ OBJ(ILEUSION/JSONXML) OBJTYPE(*SRVPGM)"
+	@echo " -- Release created! --"
+	@echo ""
 	@echo "To install the release, run:"
 	@echo "  > CRTLIB $(BIN_LIB)"
 	@echo "  > CPY OBJ('./release/RELEASE.file') TOOBJ('/QSYS.lib/$(BIN_LIB).lib/RELEASE.FILE')"
 	@echo "  > RSTLIB LIB($(BIN_LIB)) DEV(*SAVF) SAVF($(BIN_LIB)/RELEASE)"
+	@echo ""
 
 all:
 	@echo "Build finished!"
