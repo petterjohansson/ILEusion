@@ -1,6 +1,6 @@
         
         Ctl-Opt NoMain;
-        ctl-opt debug(*yes) bndDir('ILEASTIC':'NOXDB');
+        ctl-opt debug(*yes);
         
         /include ./headers/actions_h.rpgle
         /include ./headers/ILEastic.rpgle
@@ -125,16 +125,19 @@
           
           Dcl-S lResultSet Pointer;
           Dcl-S lSQLStmt   Pointer;
+          Dcl-S lParms     Pointer;
           Dcl-S lMode      Int(3);
           
           lMode    = JSON_GetNum(lDocument:'mode':1);
           lSQLStmt = JSON_Locate(lDocument:'query');
+          lParms   = JSON_Locate(lDocument:'parameters');
           
           If (lSQLStmt <> *NULL);
           	
           	Select;
           	  When (lMode = 1);
-          	  	lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt));
+          	  	lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt)
+          	  	                              :1:JSON_ALLROWS:0:lParms);
 		            
 		            If (JSON_Error(lResultSet));
 		              lResult = Generate_Error(JSON_Message(lResultSet));
@@ -144,7 +147,7 @@
 		            Endif;
 		            
           	  When (lMode = 2);
-          	  	If (json_sqlExec(json_GetValuePtr(lSQLStmt)));
+          	  	If (json_sqlExec(json_GetValuePtr(lSQLStmt):lParms));
           	  		lResult = Generate_Error(JSON_Message(lResultSet));
           	  	Else;
           	  		lResult = JSON_NewObject();

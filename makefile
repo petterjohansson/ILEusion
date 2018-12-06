@@ -17,7 +17,7 @@ ileusion.pgm: ileusion.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c ile
 
 ileusion_s.srvpgm: ileusion_s.rpgle actions.rpgle data.rpgle callfunc.rpgle types.c ileusion.bnddir
 
-ileusion.bnddir: noxdb.entry ileastic.entry
+ileusion.bnddir: jsonxml.entry ileastic.entry
 
 %.pgm:
 	qsh <<EOF

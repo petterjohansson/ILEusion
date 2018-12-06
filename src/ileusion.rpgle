@@ -6,7 +6,7 @@
         
         ctl-opt copyright('Sitemule.com  (C), 2018');
         ctl-opt decEdit('0,') datEdit(*YMD.) main(main);
-        ctl-opt debug(*yes) bndDir('ILEASTIC':'NOXDB');
+        ctl-opt debug(*yes);
         ctl-opt thread(*CONCURRENT);
         
         /include ./headers/actions_h.rpgle

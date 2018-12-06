@@ -1,7 +1,7 @@
 
         ctl-opt copyright('Sitemule.com  (C), 2018');
         ctl-opt decEdit('0,') datEdit(*YMD.) NoMain;
-        ctl-opt debug(*yes) bndDir('ILEASTIC':'NOXDB');
+        ctl-opt debug(*yes);
         
         /include ./headers/actions_h.rpgle
         /include ./headers/jsonparser.rpgle
