@@ -8,6 +8,7 @@ MODS=$(BIN_LIB)/ACTIONS $(BIN_LIB)/DATA $(BIN_LIB)/CALLFUNC $(BIN_LIB)/TYPES
 .ONESHELL:
 
 all: clean $(BIN_LIB).lib ileusion.pgm cmds ileusion_s.srvpgm
+	@echo "Build finished!"
 
 %.lib:
 	-system -q "CRTLIB $* TYPE(*PROD) TEXT('ILEusion')"
@@ -86,6 +87,3 @@ release: clean
 	@echo "  > CPYFRMSTMF FROMSTMF('./release/release.savf') TOMBR('/QSYS.lib/$(BIN_LIB).lib/RELEASE.FILE') MBROPT(*REPLACE) CVTDTA(*NONE)"
 	@echo "  > RSTLIB SAVLIB($(BIN_LIB)) DEV(*SAVF) SAVF($(BIN_LIB)/RELEASE)"
 	@echo ""
-
-all:
-	@echo "Build finished!"
