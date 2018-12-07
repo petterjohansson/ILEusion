@@ -1,3 +1,6 @@
 {
-	"make_parameters": ["BIN_LIB=ILEUSION"]
+	"build": [{
+		"command": "gmake",
+		"args": ["BIN_LIB=ILEUSION"]
+	}]
 }
