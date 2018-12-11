@@ -135,7 +135,7 @@
           If (lSQLStmt <> *NULL);
           	
           	Select;
-          	  When (lMode = 1);
+          	  When (lMode = 1); //select
           	  	lResultSet = JSON_sqlResultSet(json_GetValuePtr(lSQLStmt)
           	  	                              :1:JSON_ALLROWS:0:lParms);
 		            
@@ -146,9 +146,28 @@
 		              lResult = lResultSet;
 		            Endif;
 		            
-          	  When (lMode = 2);
+          	  When (lMode = 2); //exec
           	  	If (json_sqlExec(json_GetValuePtr(lSQLStmt):lParms));
           	  		lResult = Generate_Error(JSON_Message(lResultSet));
+          	  	Else;
+          	  		lResult = JSON_NewObject();
+          				JSON_SetBool(lResult:'success':*On);
+          	  	Endif;
+		            
+          	  When (lMode = 3); //insert
+          	  	If (json_sqlInsert(json_GetValuePtr(lSQLStmt):lParms));
+          	  		lResult = Generate_Error('Insert failed.');
+          	  	Else;
+          	  		lResult = JSON_NewObject();
+          				JSON_SetBool(lResult:'success':*On);
+          	  	Endif;
+		            
+          	  When (lMode = 4); //update
+          	    lResultSet = JSON_Locate(lDocument:'where');
+          	  	If (json_sqlUpdate(json_GetValuePtr(lSQLStmt):lParms
+          	  	   :json_GetValuePtr(lResultSet)));
+          	  	   
+          	  		lResult = Generate_Error('Update failed.');
           	  	Else;
           	  		lResult = JSON_NewObject();
           				JSON_SetBool(lResult:'success':*On);
