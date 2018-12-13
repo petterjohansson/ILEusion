@@ -8,4 +8,4 @@
              PARM KWD(login) +                                 
                   TYPE(*CHAR) LEN(1) + 
                   SPCVAL((*NO 0) (*YES 1)) DFT(*NO) +
-                  PROMPT('Basic aith required')
+                  PROMPT('Basic auth required')
