@@ -91,7 +91,7 @@
             lTotal = CurrentArg.ByteSize * CurrentArg.ArraySize;
 
             Dow (lIndex < lTotal);
-              memcpy(%Addr(ValuePtr):pValue+lIndex:CurrentArg.ByteSize);
+              memcpy(%Addr(ValuePtr):pValue+lIndex:%Size(ValuePtr));
                 
               Select;
                 When (CurrentArg.Type = 'char');
