@@ -27,16 +27,21 @@
         // Main
         // -----------------------------------------------------------------------------
         
+        //If *on, no auth header is needed and will use the server user profile
+        Dcl-S gNoLogin Ind Inz(*On) Static(*ALLTHREAD);
+        
         dcl-proc main;
           Dcl-Pi *N;
-            gHost Char(15);
-            gPort Int(10);
+            gHost        Char(15);
+            gPort        Int(10);
+            gLogin       Char(1);
           End-Pi;
 
           dcl-ds config likeds(il_config);
 
           config.host = %TrimR(gHost);
-          config.port = gPort; 
+          config.port = gPort;
+          gNoLogin = (gLogin = '0');
 
           il_listen (config : %paddr(myservlet));
 
@@ -75,14 +80,17 @@
           
             lAuthheader = il_getRequestHeader(request : 'Authorization');
             
-            If (%Len(lAuthheader) > 6);
+            //Either we need the header OR no login is required
+            If (%Len(lAuthheader) > 6 OR gNoLogin);
             
-              lAuthheader = %Subst(lAuthheader:7);
-              lAuthheader = %TrimR(lAuthheader);
-              //Eventually will have to base64 decode here.
-              lIndex = %Scan(':':lAuthheader);
-              UserInfo.Username = %Subst(lAuthheader:1:lIndex-1);
-              UserInfo.Password = %Subst(lAuthheader:lIndex+1);
+              If (NOT gNoLogin);
+                lAuthheader = %Subst(lAuthheader:7);
+                lAuthheader = %TrimR(lAuthheader);
+                //Eventually will have to base64 decode here.
+                lIndex = %Scan(':':lAuthheader);
+                UserInfo.Username = %Subst(lAuthheader:1:lIndex-1);
+                UserInfo.Password = %Subst(lAuthheader:lIndex+1);
+              Endif;
               
               UserInfo.Handle = Authorise(UserInfo.Username:UserInfo.Password);
               
@@ -144,13 +152,17 @@
           
           Dcl-S lHandle Char(12);
           
-          GetHandle(lHandle
-                   :%Addr(pUsername):%Addr(pPassword)
-                   :%Len(%TrimR(pPassword)):0
-                   :%Addr(ErrorDS));
-          
-          //TODO: One day, it might be good to return into from ErrorDS
-          Return lHandle;
+          If (NOT gNoLogin);
+            GetHandle(lHandle
+                     :%Addr(pUsername):%Addr(pPassword)
+                     :%Len(%TrimR(pPassword)):0
+                     :%Addr(ErrorDS));
+            
+            //TODO: One day, it might be good to return into from ErrorDS
+            Return lHandle;
+          Else;
+            Return 'NOLOGIN';
+          Endif;
         End-Proc;
         
         //**********************************
@@ -164,7 +176,9 @@
             Handle Pointer Value;
           End-Pr;
           
-          SetHandle(%Addr(pHandle));
+          If (NOT gNoLogin);
+            SetHandle(%Addr(pHandle));
+          Endif;
         End-Proc;
         
         //**********************************
@@ -181,5 +195,7 @@
             ErrorDS  Pointer Value;
           End-Pr;
           
-          EndHandle(%Addr(pHandle):%Addr(ErrorDS));
+          If (NOT gNoLogin);
+            EndHandle(%Addr(pHandle):%Addr(ErrorDS));
+           Endif;
         End-Proc;
