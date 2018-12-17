@@ -71,6 +71,8 @@
           Dcl-S lDocument   Pointer;
           Dcl-S lResponse   Pointer;
           
+          Dcl-Ds ErrorDS LikeDS(ErrorDS_t);
+          
           lEndpoint = il_getRequestResource(request);
           lMethod   = il_getRequestMethod(request);
           
@@ -92,28 +94,34 @@
                 UserInfo.Password = %Subst(lAuthheader:lIndex+1);
               Endif;
               
-              UserInfo.Handle = Authorise(UserInfo.Username:UserInfo.Password);
+              UserInfo.Handle = Authorise(UserInfo.Username
+                                         :UserInfo.Password
+                                         :ErrorDS);
               
-              If (UserInfo.Handle <> *Blank);
-          
-                lDocument = JSON_ParseString(request.content.string);
-                If (JSON_Error(lDocument));
-                  lResponse = Generate_Error('Error parsing JSON.');
+              Select;
+                When (UserInfo.Handle = *Blank);
+                  lResponse = Generate_Error('Login handle incorrect.');
                   
-                Else;
+                When (ErrorDS.errMsgID <> *Blank);
+                  lResponse = Generate_Error('Login error occured.'
+                                            :ErrorDS.errMsgID);
                   
-                  SetUserHandle(UserInfo.Handle);
-                  
-                  lResponse = Handle_Action(il_getRequestResource(request)
-                                           :lDocument);
-                                           
-                  EndUserHandle(UserInfo.Handle);
-                Endif;
-                
-              Else;
-                lResponse = Generate_Error('Login incorrect.');
-              Endif;
-            
+                Other;
+                  lDocument = JSON_ParseString(request.content.string);
+                  If (JSON_Error(lDocument));
+                    lResponse = Generate_Error('Error parsing JSON.');
+                    
+                  Else;
+                    
+                    SetUserHandle(UserInfo.Handle);
+                    
+                    lResponse = Handle_Action(il_getRequestResource(request)
+                                             :lDocument);
+                                             
+                    EndUserHandle(UserInfo.Handle:ErrorDS);
+                  Endif;
+              Endsl;
+              
             Else;
               lResponse = Generate_Error('Requires basic authorization.');
             Endif;
@@ -137,6 +145,7 @@
           Dcl-Pi *N Char(12);
             pUsername Char(10);
             pPassword Char(PW_LEN); 
+            pErrorDS  LikeDS(ErrorDS_t);
           End-Pi;
           
           Dcl-Pr GetHandle ExtProc('QsyGetProfileHandle');
@@ -148,17 +157,14 @@
             ErrorDS  Pointer Value;
           End-Pr;
           
-          Dcl-Ds ErrorDS LikeDS(ErrorDS_t);
-          
           Dcl-S lHandle Char(12);
           
           If (NOT gNoLogin);
             GetHandle(lHandle
                      :%Addr(pUsername):%Addr(pPassword)
                      :%Len(%TrimR(pPassword)):0
-                     :%Addr(ErrorDS));
+                     :%Addr(pErrorDS));
             
-            //TODO: One day, it might be good to return into from ErrorDS
             Return lHandle;
           Else;
             Return 'NOLOGIN';
@@ -186,9 +192,8 @@
         Dcl-Proc EndUserHandle;
           Dcl-Pi *N;
             pHandle Char(12);
+            pErrorDS  LikeDS(ErrorDS_t);
           End-Pi;
-          
-          Dcl-Ds ErrorDS LikeDS(ErrorDS_t);
           
           Dcl-Pr EndHandle ExtProc('QsyReleaseProfileHandle');
             Handle Pointer Value;
@@ -196,6 +201,6 @@
           End-Pr;
           
           If (NOT gNoLogin);
-            EndHandle(%Addr(pHandle):%Addr(ErrorDS));
-           Endif;
+            EndHandle(%Addr(pHandle):%Addr(pErrorDS));
+          Endif;
         End-Proc;

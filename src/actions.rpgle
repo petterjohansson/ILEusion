@@ -517,7 +517,8 @@
         
         Dcl-Proc Generate_Error Export;
           Dcl-Pi *N Pointer;
-            pMessage Pointer Value Options(*String);
+            pMessage   Pointer Value Options(*String);
+            pErrorCode Pointer Value Options(*String:*NoPass);
           End-Pi;
           
           Dcl-S lResult Pointer;
@@ -525,6 +526,10 @@
           lResult = JSON_newObject();
           JSON_SetBool(lResult:'success':*Off);
           JSON_SetStr(lResult:'message': pMessage);
+          
+          If (pErrorCode <> *Null);
+            JSON_SetStr(lResult:'code': pErrorCode);
+          Endif;
           
           return lResult;
         End-Proc;

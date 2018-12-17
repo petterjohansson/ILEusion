@@ -6,5 +6,6 @@
           End-Pr;
           
           Dcl-Pr Generate_Error Pointer;
-            pMessage Pointer Value Options(*String);
+            pMessage   Pointer Value Options(*String);
+            pErrorCode Pointer Value Options(*String:*NoPass);
           End-Pr;
