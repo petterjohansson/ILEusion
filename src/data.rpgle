@@ -273,6 +273,9 @@
               ArrElement = JSON_SetIterator(pValArray);
               Dow JSON_ForEach(ArrElement);
               
+                //Reset the struct bytesize for each struct
+                ByteSize = 0;
+                
                 //Each item in values array (is an array of subfields)
                 SubfieldP = JSON_SetIterator(ArrElement.this);
                 Dow JSON_ForEach(SubfieldP);
