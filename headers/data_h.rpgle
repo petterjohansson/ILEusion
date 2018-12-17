@@ -1,7 +1,7 @@
           
         Dcl-Pr Get_Result Pointer ExtProc;
           pCurrentArg Pointer; //Info about the current argument
-          pValue      Pointer; //Value pointer
+          pValue      Pointer Value; //Value pointer
         End-Pr;
         
         Dcl-Pr Generate_Data Pointer ExtProc;

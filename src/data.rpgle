@@ -1,4 +1,5 @@
-        
+**FREE
+
         Ctl-Opt NoMain;
         
         /copy ./headers/jsonparser.rpgle
@@ -12,6 +13,7 @@
           Type        Char(10);
           Length      Int(5); //Variable length for each element
           Scale       Int(3);
+          Offset      Int(5);
         End-Ds;
         
         Dcl-Ds Types Qualified Template;
@@ -63,7 +65,7 @@
         
           Dcl-Pi *N Pointer;
             pCurrentArg Pointer; //Info about the current argument
-            pValue      Pointer; //Value pointer
+            pValue      Pointer Value; //Value pointer
           End-Pi;
           
           Dcl-S  lIndex     Int(5);
@@ -73,6 +75,13 @@
           Dcl-DS ValuePtr   LikeDS(Types);
           Dcl-Ds CurrentArg LikeDS(CurrentArg_T);
           
+          Dcl-S  StructRes   Pointer;
+          Dcl-S  ValuesPtr   Pointer;
+          Dcl-DS ArrayElem   LikeDS(JSON_ITERATOR);
+          Dcl-DS StructEle   LikeDS(JSON_ITERATOR);
+          
+          Dcl-s SomeString Char(1024);
+          
           Dcl-s  lDecimalRes Char(32);
 
           CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
@@ -80,6 +89,10 @@
           CurrentArg.Scale       = JSON_GetNum(pCurrentArg:'precision':0);
           CurrentArg.ByteSize    = JSON_GetNum(pCurrentArg:'bytesize':0);
           CurrentArg.ArraySize   = JSON_GetNum(pCurrentArg:'arraysize':1);
+          
+          //Apply the offset incase is a subfield
+          CurrentArg.Offset = JSON_GetNum(pCurrentArg:'offset':0);
+          pValue += CurrentArg.Offset;
           
           If (CurrentArg.ByteSize = 0);
             CurrentArg.ByteSize = GetByteSize(CurrentArg);
@@ -94,6 +107,29 @@
               memcpy(%Addr(ValuePtr):pValue+lIndex:%Size(ValuePtr));
                 
               Select;
+                When (CurrentArg.Type = 'struct');
+                  SomeString = json_AsJsonText(pCurrentArg);
+                  ValuesPtr = JSON_Locate(pCurrentArg:'values');
+                  ArrayElem = JSON_SetIterator(ValuesPtr);
+                  
+                  Dow JSON_ForEach(ArrayElem);
+                    StructEle = JSON_SetIterator(ArrayElem.this);
+                    
+                    Dow JSON_ForEach(StructEle);
+                      SomeString = json_AsJsonText(StructEle.this);
+                      StructRes = Get_Result(StructEle.this:pValue+lIndex);
+                      
+                      If (JSON_GetLength(StructRes) = 1);
+                        JSON_ArrayPush(lArray:JSON_GetChild(StructRes));
+                      Else;
+                        JSON_ArrayPush(lArray:StructRes);
+                      Endif;
+                    Enddo;
+                    
+                  Enddo;
+                  
+                  lResult = '*OMIT';
+              
                 When (CurrentArg.Type = 'char');
                   lResult = %TrimR(%Str(pValue+lIndex:CurrentArg.ByteSize));
                   
@@ -151,7 +187,10 @@
                   lResult = %TrimR(lDecimalRes);
               Endsl;
               
-              JSON_ArrayPush(lArray:lResult);
+              If (lResult <> '*OMIT');
+                JSON_ArrayPush(lArray:lResult);
+              Endif;
+              
               lIndex += CurrentArg.ByteSize;
             Enddo;
 
@@ -177,16 +216,20 @@
 
           if (lArray = *NULL);
             CurrentArg.ArraySize = 1;
-            lArray    = JSON_NewArray();
-            JSON_ArrayPush(lArray:JSON_GetStr(pCurrentArg:'value'));
+            lArray = json_MoveObjectInto(pCurrentArg:'values':JSON_NewArray());
+            JSON_ArrayPush(lArray:JSON_GetStr(pCurrentArg:'value')
+                          :JSON_COPY_CLONE);
+          
+            json_NodeDelete(JSON_Locate(pCurrentArg:'value'));
           Else;
             CurrentArg.ArraySize = JSON_GetLength(lArray);
           Endif;
 
-          CurrentArg.Type        = JSON_GetStr(pCurrentArg:'type');
-          CurrentArg.Length      = JSON_GetNum(pCurrentArg:'length':1);
-          CurrentArg.Scale       = JSON_GetNum(pCurrentArg:'precision':0);
-          CurrentArg.ByteSize    = GetByteSize(CurrentArg);
+          CurrentArg.Type     = JSON_GetStr(pCurrentArg:'type');
+          CurrentArg.Length   = JSON_GetNum(pCurrentArg:'length':1);
+          CurrentArg.Scale    = JSON_GetNum(pCurrentArg:'precision':0);
+          CurrentArg.ByteSize = GetByteSize(CurrentArg:lArray);
+          CurrentArg.Offset   = 0;
           
           If (CurrentArg.ByteSize > 0);
             JSON_SetNum(pCurrentArg:'bytesize':CurrentArg.ByteSize);
@@ -209,11 +252,62 @@
         Dcl-Proc GetByteSize;
           Dcl-Pi *N Int(5);
             pCurrentArg LikeDS(CurrentArg_T);
+            pValArray   Pointer Options(*NoPass);
           End-Pi;
           
-          Dcl-S ByteSize Int(5) Inz(0);
+          Dcl-S  ByteSize  Int(5) Inz(0);
+          
+          Dcl-DS Subfield  LikeDS(CurrentArg_T);
+          Dcl-S  Structure Pointer;
+          Dcl-S  ValuesArr Pointer;
+          
+          Dcl-DS ArrElement likeds(JSON_ITERATOR);
+          Dcl-DS SubfieldP  likeds(JSON_ITERATOR);
+          
+          Dcl-S SomeString Char(1024);
           
           Select;
+            When (pCurrentArg.Type = 'struct');
+              ByteSize = 0;
+              //'values' attribute (array)
+              ArrElement = JSON_SetIterator(pValArray);
+              Dow JSON_ForEach(ArrElement);
+              
+                //Each item in values array (is an array of subfields)
+                SubfieldP = JSON_SetIterator(ArrElement.this);
+                Dow JSON_ForEach(SubfieldP);
+                  Subfield.Type     = JSON_GetStr(SubfieldP.this:'type');
+                  Subfield.Length   = JSON_GetNum(SubfieldP.this:'length':1);
+                  Subfield.Scale    = JSON_GetNum(SubfieldP.this:'precision':0);
+                  
+                  ValuesArr = JSON_Locate(SubfieldP.this:'values');
+                  
+                  //Calculate array size of elements
+                  if (ValuesArr = *NULL);
+                    Subfield.ArraySize = 1;
+                    ValuesArr = json_MoveObjectInto(SubfieldP.this
+                                                   :'values':JSON_NewArray());
+                    JSON_ArrayPush(ValuesArr:JSON_GetStr(SubfieldP.this
+                                                        :'value')
+                                                        :JSON_COPY_CLONE);
+                                                        
+                    json_NodeDelete(JSON_Locate(SubfieldP.this:'value'));
+                  Else;
+                    Subfield.ArraySize = JSON_GetLength(ValuesArr);
+                  Endif;
+                  
+                  Subfield.ByteSize = GetByteSize(Subfield);
+                  
+                  //We also set the offsets so we can use these later :p
+                  JSON_SetNum(SubfieldP.this:'offset':ByteSize);
+                  JSON_SetNum(SubfieldP.this:'bytesize':Subfield.ByteSize);
+                  JSON_SetNum(SubfieldP.this:'arraysize':Subfield.ArraySize);
+                  
+                  ByteSize += (Subfield.ByteSize*Subfield.ArraySize);
+                Enddo;
+                
+              Enddo;
+          
             When (pCurrentArg.Type = 'char');
               ByteSize = pCurrentArg.Length;
               
@@ -278,11 +372,30 @@
           Dcl-Ds ValuePtr  LikeDS(Types);
           Dcl-S  lIndex    Int(5);
           Dcl-DS lList     likeds(JSON_ITERATOR);
+          
+          Dcl-S  SubfValues Pointer;
+          Dcl-DS Subfields likeds(JSON_ITERATOR);
+          Dcl-Ds Subfield  LikeDS(CurrentArg_T);
 
-          lIndex = 0;
+          lIndex = pArg.Offset;
           lList = JSON_SetIterator(pArray); //Array: value
           Dow JSON_ForEach(lList);
             Select;
+              When (pArg.type = 'struct');
+                Subfields = JSON_SetIterator(lList.this);
+                Dow JSON_ForEach(Subfields);
+                
+                  Subfield.Type      = JSON_GetStr(Subfields.this:'type');
+                  Subfield.Length    = JSON_GetNum(Subfields.this:'length':1);
+                  Subfield.Scale     = JSON_GetNum(Subfields.this:'precision':0);
+                  Subfield.ByteSize  = JSON_GetNum(Subfields.this:'bytesize':0);
+                  Subfield.ArraySize = JSON_GetNum(Subfields.this:'arraysize':1);
+                  Subfield.Offset    = JSON_GetNum(Subfields.this:'offset':0);
+                  
+                  SubfValues = JSON_Locate(Subfields.this:'values');
+                  AppendValues(pResult:SubfValues:Subfield);
+                Enddo;
+            
               When (pArg.Type = 'char');
                 %Str(pResult+lIndex:pArg.ByteSize) = JSON_GetStr(lList.this);
                 
