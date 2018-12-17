@@ -8,6 +8,9 @@
         /include ./headers/data_h.rpgle
         /include ./headers/callfunc_h.rpgle
         
+        //Am assuming is threadsafe?
+        Dcl-s errmsgid char(7) import('_EXCP_MSGID');
+        
         Dcl-Pr GetLibraryPointer extproc('_RSLVSP2');
           Object  Pointer;
           Options Char(34);
@@ -62,11 +65,6 @@
           KeyOrder Char(2)   Options(*NoPass);
           KeyLen   Packed(3) Options(*NoPass);
           Key      Pointer   Options(*NoPass);
-        End-Pr;
-        
-        Dcl-Pr QCMDEXC ExtPgm('QCMDEXC');
-          Command Char(1024)    Options(*Varsize)  Const;
-          Length  Packed(15:5)  Const;
         End-Pr;
 
         // -----------------------------------------------------------------------------
@@ -466,23 +464,29 @@
             lDocument Pointer;
           end-pi;
           
+          Dcl-Pr system int(10) extproc('system');
+            cmdstring pointer value options(*string);
+          End-Pr;
+          
           Dcl-S lResponse Pointer;
+          Dcl-S lCommand  Pointer;
+          Dcl-S lCode     Int(3);
           
-          Dcl-S lCommand Char(1024);
-          Dcl-S lLength  Packed(15:5);
+          lCommand = JSON_Locate(lDocument:'command');
           
-          lCommand = JSON_GetStr(lDocument:'command':'');
-          lLength  = %Len(lCommand);
+          il_enterThreadSerialize();
+          lCode = system(json_GetValuePtr(lCommand));
           
-          Monitor;
-            il_enterThreadSerialize();
-            QCMDEXC(lCommand:lLength);
-            il_exitThreadSerialize();
+          If (lCode = 0);
             lResponse = JSON_NewObject();
             JSON_SetBool(lResponse:'success':*On);
-          On-Error *All;
-            lResponse = Generate_Error('Error during execution of command.');
-          Endmon;
+          Else;
+            lResponse = Generate_Error('Failed to execute CL command.'
+                                      :errmsgid);
+          Endif;
+          
+          //We end here because we need access to errmsgid
+          il_exitThreadSerialize();
           
           Return lResponse;
         End-Proc;
