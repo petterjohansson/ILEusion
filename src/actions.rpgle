@@ -202,7 +202,6 @@
             
             LibPtr  Pointer;
             CallPtr Pointer; //Pointer to object or function
-            RetSize Uns(5);
           End-Ds;
           
           Dcl-S lResParm   Pointer; //Parameter return document
@@ -258,11 +257,6 @@
                                      :ProgramInfo.Function
                                      :ProgramInfo.CallPtr
                                      :lExportRes);
-                                     
-              lResParm = JSON_Locate(lDocument:'result');
-              If (lResParm <> *Null);
-                ProgramInfo.RetSize = JSON_GetNum(lResParm:'approxsize':1024);
-              Endif;
             Endif;
             
             //Now generate the parameters.
@@ -276,7 +270,7 @@
                 Leave;
               Endif;
             enddo;
-            
+        
           On-Error *All;
             lResponse = Generate_Error('Error parsing request.');
             MakeCall = *Off;
@@ -293,8 +287,7 @@
               If (IsFunction);
                 lFuncRes = callfunc(ProgramInfo.CallPtr 
                                    :ProgramInfo.argv 
-                                   :ProgramInfo.argc
-                                   :ProgramInfo.RetSize);
+                                   :ProgramInfo.argc);
               Else;
                 callpgmv(ProgramInfo.CallPtr 
                         :ProgramInfo.argv 
@@ -328,8 +321,10 @@
               
               //If it's a function, get the result!
               If (IsFunction);
+                lResParm = JSON_Locate(lDocument:'result');
                 If (lResParm <> *Null);
-                  lResParm = Get_Result(lResParm:lFuncRes);
+                  lResParm = Get_Result(lResParm
+                                       :lFuncRes);
                                        
                   If (JSON_GetLength(lResParm) = 1);
                     JSON_SetPtr(lResponse:'result':JSON_GetChild(lResParm));
@@ -342,10 +337,6 @@
             On-Error *All;
               lResponse = Generate_Error('Error making call.');
             Endmon;
-          Endif;
-          
-          If (IsFunction AND lFuncRes <> *Null);
-            Dealloc lFuncRes;
           Endif;
           
           //Also deallocate everything :)
