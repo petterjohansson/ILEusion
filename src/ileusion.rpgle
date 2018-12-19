@@ -58,7 +58,9 @@
             response likeds(il_response);
           end-pi;
           
-          Dcl-S lAuthheader Varchar(128);
+          Dcl-S lAuthheader Char(128);
+          Dcl-S ResultLength Int(10);
+          
           Dcl-S lIndex Int(3);
           Dcl-Ds UserInfo Qualified;
             Username Char(10);
@@ -88,7 +90,10 @@
               If (NOT gNoLogin);
                 lAuthheader = %Subst(lAuthheader:7);
                 lAuthheader = %TrimR(lAuthheader);
+                
                 //Eventually will have to base64 decode here.
+                lAuthheader = il_decodeBase64(lAuthheader);
+                            
                 lIndex = %Scan(':':lAuthheader);
                 UserInfo.Username = %Subst(lAuthheader:1:lIndex-1);
                 UserInfo.Password = %Subst(lAuthheader:lIndex+1);
