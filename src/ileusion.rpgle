@@ -136,7 +136,7 @@
           Endif;
           
           If (lResponse <> *NULL);
-            il_responseWrite(response:JSON_AsJsonText(lResponse));
+            il_responseWriteStream(response : json_stream(lResponse));
             JSON_NodeDelete(lResponse);
           Endif;
           
